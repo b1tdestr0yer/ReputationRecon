@@ -475,8 +475,15 @@
         
         function displayResults(data) {
             const resultsDiv = document.getElementById('results');
-            const trustScore = data.trust_score.score;
-            const riskLevel = data.trust_score.risk_level;
+            
+            // Check if trust_score exists
+            if (!data.trust_score) {
+                alert('Error: Trust score data is missing from the assessment response');
+                return;
+            }
+            
+            const trustScore = data.trust_score.score || 0;
+            const riskLevel = data.trust_score.risk_level || 'Unknown';
             const scoreClass = trustScore >= 70 ? 'high' : trustScore >= 50 ? 'medium' : 'low';
             
             let html = `
@@ -486,8 +493,8 @@
                 <div class="trust-score ${scoreClass}">
                     <div class="score-value">${trustScore}/100</div>
                     <div class="risk-level">${riskLevel} Risk</div>
-                    <p>Confidence: ${(data.trust_score.confidence * 100).toFixed(0)}%</p>
-                    <p>${data.trust_score.rationale}</p>
+                    <p>Confidence: ${((data.trust_score.confidence || 0) * 100).toFixed(0)}%</p>
+                    <p>${data.trust_score.rationale || 'No rationale provided'}</p>
                 </div>
                 
                 <div class="section">
@@ -582,14 +589,15 @@
             let html = '<h2>Comparison Results</h2><table class="comparison-table"><thead><tr><th>Application</th><th>Vendor</th><th>Trust Score</th><th>Risk Level</th><th>CVEs</th><th>CISA KEV</th></tr></thead><tbody>';
             
             data.assessments.forEach(assessment => {
-                const score = assessment.trust_score.score;
+                const score = (assessment.trust_score && assessment.trust_score.score) || 0;
+                const riskLevel = (assessment.trust_score && assessment.trust_score.risk_level) || 'Unknown';
                 html += `<tr>
-                    <td>${assessment.entity_name}</td>
-                    <td>${assessment.vendor_name}</td>
+                    <td>${assessment.entity_name || 'N/A'}</td>
+                    <td>${assessment.vendor_name || 'N/A'}</td>
                     <td>${score}/100</td>
-                    <td>${assessment.trust_score.risk_level}</td>
-                    <td>${assessment.security_posture.cve_summary.total_cves}</td>
-                    <td>${assessment.security_posture.cve_summary.cisa_kev_count}</td>
+                    <td>${riskLevel}</td>
+                    <td>${(assessment.security_posture && assessment.security_posture.cve_summary && assessment.security_posture.cve_summary.total_cves) || 0}</td>
+                    <td>${(assessment.security_posture && assessment.security_posture.cve_summary && assessment.security_posture.cve_summary.cisa_kev_count) || 0}</td>
                 </tr>`;
             });
             

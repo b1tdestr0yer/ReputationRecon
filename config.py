@@ -16,8 +16,8 @@ class Config:
     # VirusTotal API Key
     VIRUSTOTAL_API_KEY: Optional[str] = os.getenv("VIRUSTOTAL_API_KEY")
     
-    # OpenAI API Key (optional, for enhanced AI synthesis)
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+    # Google Gemini API Key (required for AI-powered analysis)
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     
     # Cache settings
     CACHE_DB_PATH: str = os.getenv("CACHE_DB_PATH", "assessments_cache.db")
@@ -34,16 +34,16 @@ class Config:
         return cls.VIRUSTOTAL_API_KEY is not None and cls.VIRUSTOTAL_API_KEY.strip() != ""
     
     @classmethod
-    def is_openai_configured(cls) -> bool:
-        """Check if OpenAI API key is configured"""
-        return cls.OPENAI_API_KEY is not None and cls.OPENAI_API_KEY.strip() != ""
+    def is_gemini_configured(cls) -> bool:
+        """Check if Google Gemini API key is configured"""
+        return cls.GEMINI_API_KEY is not None and cls.GEMINI_API_KEY.strip() != ""
     
     @classmethod
     def get_status(cls) -> dict:
         """Get configuration status"""
         return {
             "virustotal_configured": cls.is_virustotal_configured(),
-            "openai_configured": cls.is_openai_configured(),
+            "gemini_configured": cls.is_gemini_configured(),
             "cache_db_path": cls.CACHE_DB_PATH,
             "cache_ttl_days": cls.CACHE_TTL_DAYS
         }

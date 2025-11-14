@@ -174,17 +174,24 @@ class AssessmentService:
         print(f"  → Queueing CISA KEV lookup...")
         tasks.append(self.cve_collector.get_cisa_kev(entity_name))
         
-        # Vendor pages
+        # Vendor pages - try to find even without explicit URL
         async def noop():
             return None
         
-        if url:
+        vendor_url = url
+        if not vendor_url and vendor_name and vendor_name.lower() not in ["unknown vendor", "unknown"]:
+            # Try to construct a URL from vendor name
+            vendor_domain = vendor_name.lower().replace(" ", "").replace(".", "")
+            vendor_url = f"https://{vendor_domain}.com"
+            print(f"  → Attempting to find vendor pages using constructed URL: {vendor_url}")
+        
+        if vendor_url:
             print(f"  → Queueing vendor page fetch...")
-            tasks.append(self.vendor_collector.fetch_security_page(url))
+            tasks.append(self.vendor_collector.fetch_security_page(vendor_url))
             print(f"  → Queueing Terms of Service fetch...")
-            tasks.append(self.vendor_collector.fetch_terms_of_service(url))
+            tasks.append(self.vendor_collector.fetch_terms_of_service(vendor_url))
         else:
-            print(f"  → Skipping vendor pages (no URL provided)")
+            print(f"  → Skipping vendor pages (no URL available)")
             tasks.append(noop())
             tasks.append(noop())
         
@@ -232,17 +239,31 @@ class AssessmentService:
             assessments.append(assessment.model_dump())
         
         print(f"\n[Assessment Service] Comparison complete - analyzing results...")
+        
+        # Safely get trust scores for comparison
+        def get_trust_score(x):
+            return (x.get("trust_score") or {}).get("score", 0)
+        
+        if assessments:
+            highest_trust = max(assessments, key=get_trust_score)
+            lowest_trust = min(assessments, key=get_trust_score)
+        else:
+            highest_trust = None
+            lowest_trust = None
+        
         result = {
             "assessments": assessments,
             "comparison": {
                 "count": len(assessments),
-                "highest_trust": max(assessments, key=lambda x: x["trust_score"]["score"]),
-                "lowest_trust": min(assessments, key=lambda x: x["trust_score"]["score"])
+                "highest_trust": highest_trust,
+                "lowest_trust": lowest_trust
             }
         }
-        highest = result["comparison"]["highest_trust"]
-        lowest = result["comparison"]["lowest_trust"]
-        print(f"[Assessment Service] Highest trust: {highest['entity_name']} ({highest['trust_score']['score']}/100)")
-        print(f"[Assessment Service] Lowest trust: {lowest['entity_name']} ({lowest['trust_score']['score']}/100)")
+        
+        if highest_trust and lowest_trust:
+            highest_score = get_trust_score(highest_trust)
+            lowest_score = get_trust_score(lowest_trust)
+            print(f"[Assessment Service] Highest trust: {highest_trust.get('entity_name', 'Unknown')} ({highest_score}/100)")
+            print(f"[Assessment Service] Lowest trust: {lowest_trust.get('entity_name', 'Unknown')} ({lowest_score}/100)")
         return result
 

@@ -25,10 +25,10 @@ if ([string]::IsNullOrWhiteSpace($vtKey)) {
     $vtKey = ""
 }
 
-# OpenAI API Key
-$openaiKey = Read-Host "OpenAI API Key (optional, for enhanced AI synthesis)"
-if ([string]::IsNullOrWhiteSpace($openaiKey)) {
-    $openaiKey = ""
+# Google Gemini API Key
+$geminiKey = Read-Host "Google Gemini API Key (REQUIRED, get from https://makersuite.google.com/app/apikey)"
+if ([string]::IsNullOrWhiteSpace($geminiKey)) {
+    $geminiKey = ""
 }
 
 # Create .env file
@@ -39,8 +39,8 @@ $envContent = @"
 # VirusTotal API Key
 VIRUSTOTAL_API_KEY=$vtKey
 
-# OpenAI API Key
-OPENAI_API_KEY=$openaiKey
+# Google Gemini API Key
+GEMINI_API_KEY=$geminiKey
 "@
 
 $envContent | Out-File -FilePath .env -Encoding utf8
@@ -56,9 +56,9 @@ if ($setSession -eq "y" -or $setSession -eq "Y") {
         $env:VIRUSTOTAL_API_KEY = $vtKey
         Write-Host "✓ VIRUSTOTAL_API_KEY set for this session" -ForegroundColor Green
     }
-    if (-not [string]::IsNullOrWhiteSpace($openaiKey)) {
-        $env:OPENAI_API_KEY = $openaiKey
-        Write-Host "✓ OPENAI_API_KEY set for this session" -ForegroundColor Green
+    if (-not [string]::IsNullOrWhiteSpace($geminiKey)) {
+        $env:GEMINI_API_KEY = $geminiKey
+        Write-Host "✓ GEMINI_API_KEY set for this session" -ForegroundColor Green
     }
 }
 

@@ -89,14 +89,14 @@ To make these permanent, add them to your shell profile:
 
 **Note**: Free tier allows 4 requests per minute.
 
-### OpenAI API Key (Optional)
+### Google Gemini API Key (REQUIRED)
 
-1. Go to https://platform.openai.com/api-keys
-2. Sign up or log in
-3. Create a new API key
+1. Go to https://makersuite.google.com/app/apikey
+2. Sign in with your Google account
+3. Click "Create API Key"
 4. Copy your API key
 
-**Note**: This is optional and only needed for enhanced AI synthesis features.
+**Note**: This is REQUIRED for AI-powered classification and analysis. The system will use fallback methods if not configured, but results will be less accurate.
 
 ## Verify Configuration
 

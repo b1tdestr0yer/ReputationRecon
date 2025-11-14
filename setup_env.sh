@@ -23,8 +23,8 @@ echo ""
 # VirusTotal API Key
 read -p "VirusTotal API Key (optional, get from https://www.virustotal.com/gui/join-us): " vt_key
 
-# OpenAI API Key
-read -p "OpenAI API Key (optional, for enhanced AI synthesis): " openai_key
+# Google Gemini API Key
+read -p "Google Gemini API Key (REQUIRED, get from https://makersuite.google.com/app/apikey): " gemini_key
 
 # Create .env file
 cat > .env << EOF
@@ -34,8 +34,8 @@ cat > .env << EOF
 # VirusTotal API Key
 VIRUSTOTAL_API_KEY=${vt_key:-}
 
-# OpenAI API Key
-OPENAI_API_KEY=${openai_key:-}
+# Google Gemini API Key
+GEMINI_API_KEY=${gemini_key:-}
 EOF
 
 echo ""
@@ -49,9 +49,9 @@ if [ "$export_session" = "y" ] || [ "$export_session" = "Y" ]; then
         export VIRUSTOTAL_API_KEY="$vt_key"
         echo "✓ VIRUSTOTAL_API_KEY exported for this session"
     fi
-    if [ -n "$openai_key" ]; then
-        export OPENAI_API_KEY="$openai_key"
-        echo "✓ OPENAI_API_KEY exported for this session"
+    if [ -n "$gemini_key" ]; then
+        export GEMINI_API_KEY="$gemini_key"
+        echo "✓ GEMINI_API_KEY exported for this session"
     fi
 fi
 

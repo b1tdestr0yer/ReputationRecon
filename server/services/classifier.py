@@ -1,78 +1,112 @@
 from typing import Dict, Optional
 from server.dtos.AssessmentResponse import SoftwareCategory
+import google.generativeai as genai
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class SoftwareClassifier:
-    """Classify software into taxonomy categories"""
-    
-    # Category keywords mapping
-    CATEGORY_KEYWORDS = {
-        SoftwareCategory.FILE_SHARING: [
-            "file sharing", "file storage", "dropbox", "onedrive", "google drive",
-            "file transfer", "file sync", "cloud storage"
-        ],
-        SoftwareCategory.GENAI_TOOL: [
-            "ai", "artificial intelligence", "machine learning", "llm", "gpt",
-            "generative", "chatbot", "openai", "claude", "bard"
-        ],
-        SoftwareCategory.SAAS_CRM: [
-            "crm", "customer relationship", "salesforce", "hubspot", "sales",
-            "customer management"
-        ],
-        SoftwareCategory.ENDPOINT_AGENT: [
-            "endpoint", "edr", "antivirus", "security agent", "malware",
-            "threat detection", "crowdstrike", "sentinelone"
-        ],
-        SoftwareCategory.COLLABORATION: [
-            "collaboration", "slack", "teams", "workspace", "team chat",
-            "communication platform"
-        ],
-        SoftwareCategory.SECURITY_TOOL: [
-            "security", "vulnerability scanner", "penetration testing",
-            "security assessment", "siem", "soar"
-        ],
-        SoftwareCategory.DEVELOPMENT: [
-            "development", "ide", "code editor", "version control", "git",
-            "ci/cd", "devops"
-        ],
-        SoftwareCategory.CLOUD_STORAGE: [
-            "cloud storage", "s3", "azure storage", "cloud backup"
-        ],
-        SoftwareCategory.COMMUNICATION: [
-            "email", "messaging", "voip", "video conferencing", "zoom",
-            "skype", "whatsapp"
-        ],
-        SoftwareCategory.PROJECT_MANAGEMENT: [
-            "project management", "jira", "asana", "trello", "task management"
-        ]
-    }
-    
-    def classify(self, product_name: str, vendor_name: str, 
-                description: Optional[str] = None, url: Optional[str] = None) -> SoftwareCategory:
-        """Classify software into a category"""
-        print(f"[Classifier] Classifying: {product_name} / {vendor_name}")
-        # Combine all text for analysis
-        text = f"{product_name} {vendor_name}".lower()
-        if description:
-            text += f" {description.lower()}"
-        if url:
-            text += f" {url.lower()}"
-        
-        # Score each category
-        scores = {}
-        for category, keywords in self.CATEGORY_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
-            if score > 0:
-                scores[category] = score
-        
-        # Return category with highest score, or OTHER if no match
-        if scores:
-            max_score = max(scores.values())
-            if max_score > 0:
-                best_category = max(scores, key=scores.get)
-                print(f"[Classifier] ✓ Classified as: {best_category.value} (score: {max_score})")
-                return best_category
-        
-        print(f"[Classifier] ✓ Classified as: {SoftwareCategory.OTHER.value} (no match found)")
-        return SoftwareCategory.OTHER
+    """
+    AI-augmented but deterministic software classifier.
+    Uses Gemini when available, otherwise clean keyword fallback.
+    """
 
+    def __init__(self):
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            genai.configure(api_key=api_key)
+            # Use gemini-2.5-flash (faster) or gemini-2.5-pro (more capable)
+            try:
+                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                self.use_ai = True
+                print("[Classifier] ✓ Google Gemini configured for AI-powered classification (using gemini-2.5-flash)")
+            except Exception as e:
+                print(f"[Classifier] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
+                try:
+                    self.model = genai.GenerativeModel('gemini-2.5-pro')
+                    self.use_ai = True
+                    print("[Classifier] ✓ Google Gemini configured (using gemini-2.5-pro)")
+                except Exception as e2:
+                    print(f"[Classifier] ✗ Error initializing Gemini models: {e2}, using fallback")
+                    self.model = None
+                    self.use_ai = False
+        else:
+            self.model = None
+            self.use_ai = False
+
+        # Normalizat, extins, mult mai robust
+        self.category_aliases = {
+            "file sharing": SoftwareCategory.FILE_SHARING,
+            "file storage": SoftwareCategory.FILE_SHARING,
+            "cloud storage": SoftwareCategory.CLOUD_STORAGE,
+            "genai": SoftwareCategory.GENAI_TOOL,
+            "gen ai": SoftwareCategory.GENAI_TOOL,
+            "ai tool": SoftwareCategory.GENAI_TOOL,
+            "crm": SoftwareCategory.SAAS_CRM,
+            "saas crm": SoftwareCategory.SAAS_CRM,
+            "project management": SoftwareCategory.PROJECT_MANAGEMENT,
+            "endpoint": SoftwareCategory.ENDPOINT_AGENT,
+            "endpoint security": SoftwareCategory.ENDPOINT_AGENT,
+            "collaboration": SoftwareCategory.COLLABORATION,
+            "communication": SoftwareCategory.COMMUNICATION,
+            "security tool": SoftwareCategory.SECURITY_TOOL,
+            "development": SoftwareCategory.DEVELOPMENT,
+        }
+
+    def classify(
+        self,
+        product_name: str,
+        vendor_name: str,
+        description: Optional[str] = None,
+        url: Optional[str] = None
+    ) -> SoftwareCategory:
+
+        text = " ".join([
+            product_name or "",
+            vendor_name or "",
+            description or ""
+        ]).lower()
+
+        # If AI available
+        if self.use_ai and self.model:
+            try:
+                prompt = f"""
+Classify the following software into ONE of these categories:
+
+- File Sharing
+- GenAI Tool
+- SaaS CRM
+- Endpoint Agent
+- Collaboration
+- Security Tool
+- Development
+- Cloud Storage
+- Communication
+- Project Management
+- Other
+
+Respond with *only the category name*, nothing else.
+
+Product: {product_name}
+Vendor: {vendor_name}
+Description: {description or "none"}
+URL: {url or "none"}
+"""
+                resp = self.model.generate_content(prompt)
+                out = resp.text.strip().lower()
+                for alias, cat in self.category_aliases.items():
+                    if alias in out:
+                        return cat
+                return SoftwareCategory.OTHER
+
+            except Exception:
+                pass  # fallback below
+
+        # Fallback deterministic keyword matching
+        for alias, cat in self.category_aliases.items():
+            if alias in text:
+                return cat
+
+        return SoftwareCategory.OTHER
