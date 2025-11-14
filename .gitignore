@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.env
+
+
+*.log
+# PyCharm
+.idea/
+
+# VSCode settings
+.vscode/
+
+# OS specific
+Thumbs.db
+.DS_Store
+
+# pipeline
+.cache/
+.coverage
+venv/
+
