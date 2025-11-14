@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReputationRecon - Security Assessment Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .results {
+            margin-top: 40px;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .trust-score {
+            text-align: center;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .trust-score.high {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+        
+        .trust-score.medium {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+        }
+        
+        .trust-score.low {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+        
+        .score-value {
+            font-size: 4em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .risk-level {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .citation {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .compare-mode {
+            display: none;
+        }
+        
+        .compare-mode.show {
+            display: block;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .comparison-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .comparison-table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .cve-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .cve-table th,
+        .cve-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+        }
+        
+        .cve-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .cve-table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .cve-critical {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .cve-high {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+        
+        .export-buttons {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .export-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .export-btn:hover {
+            background: #218838;
+        }
+        
+        .sources-list {
+            margin-top: 15px;
+        }
+        
+        .source-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        
+        .source-item.vendor {
+            border-left-color: #28a745;
+        }
+        
+        .source-item.independent {
+            border-left-color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ ReputationRecon</h1>
+        <p class="subtitle">AI-Powered Security Assessment Tool</p>
+        
+        <div class="form-group">
+            <button onclick="toggleMode()" class="btn-secondary">Switch to Compare Mode</button>
+        </div>
+        
+        <!-- Single Assessment Form -->
+        <div id="single-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="product">Product Name</label>
+                    <input type="text" id="product" placeholder="e.g., Slack">
+                </div>
+                <div class="form-group">
+                    <label for="vendor">Vendor Name</label>
+                    <input type="text" id="vendor" placeholder="e.g., Salesforce">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="url">URL (optional)</label>
+                    <input type="url" id="url" placeholder="https://example.com">
+                </div>
+                <div class="form-group">
+                    <label for="hash">Hash (optional)</label>
+                    <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256">
+                </div>
+            </div>
+            
+            <button onclick="assessApplication()">Assess Application</button>
+        </div>
+        
+        <!-- Compare Mode Form -->
+        <div id="compare-form" class="compare-mode">
+            <h2>Compare Applications</h2>
+            <div id="compare-inputs">
+                <div class="form-row compare-item">
+                    <div class="form-group">
+                        <label>Product 1</label>
+                        <input type="text" class="compare-product" placeholder="Product name">
+                    </div>
+                    <div class="form-group">
+                        <label>Vendor 1</label>
+                        <input type="text" class="compare-vendor" placeholder="Vendor name">
+                    </div>
+                </div>
+                <div class="form-row compare-item">
+                    <div class="form-group">
+                        <label>Product 2</label>
+                        <input type="text" class="compare-product" placeholder="Product name">
+                    </div>
+                    <div class="form-group">
+                        <label>Vendor 2</label>
+                        <input type="text" class="compare-vendor" placeholder="Vendor name">
+                    </div>
+                </div>
+            </div>
+            <button onclick="addCompareItem()">+ Add Another</button>
+            <button onclick="compareApplications()">Compare Applications</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 20px;">Assessing application security...</p>
+        </div>
+        
+        <div class="results" id="results"></div>
+    </div>
+    
+    <script>
+        let isCompareMode = false;
+        let currentAssessmentData = null; // Store current assessment for export
+        
+        function toggleMode() {
+            isCompareMode = !isCompareMode;
+            document.getElementById('single-form').style.display = isCompareMode ? 'none' : 'block';
+            document.getElementById('compare-form').classList.toggle('show', isCompareMode);
+            document.querySelector('.btn-secondary').textContent = isCompareMode ? 'Switch to Single Mode' : 'Switch to Compare Mode';
+        }
+        
+        function addCompareItem() {
+            const container = document.getElementById('compare-inputs');
+            const count = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'form-row compare-item';
+            div.innerHTML = `
+                <div class="form-group">
+                    <label>Product ${count}</label>
+                    <input type="text" class="compare-product" placeholder="Product name">
+                </div>
+                <div class="form-group">
+                    <label>Vendor ${count}</label>
+                    <input type="text" class="compare-vendor" placeholder="Vendor name">
+                </div>
+            `;
+            container.appendChild(div);
+        }
+        
+        async function assessApplication() {
+            const product = document.getElementById('product').value;
+            const vendor = document.getElementById('vendor').value;
+            const url = document.getElementById('url').value;
+            const hash = document.getElementById('hash').value;
+            
+            if (!product && !vendor && !url) {
+                alert('Please provide at least one of: product name, vendor name, or URL');
+                return;
+            }
+            
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('results').classList.remove('show');
+            
+            try {
+                const response = await fetch('/api/assess', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        product_name: product || null,
+                        vendor_name: vendor || null,
+                        url: url || null,
+                        hash: hash || null
+                    })
+                });
+                
+                const data = await response.json();
+                currentAssessmentData = data; // Store for export
+                displayResults(data);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                document.getElementById('loading').classList.remove('show');
+            }
+        }
+        
+        async function compareApplications() {
+            const items = document.querySelectorAll('.compare-item');
+            const requests = [];
+            
+            for (const item of items) {
+                const product = item.querySelector('.compare-product').value;
+                const vendor = item.querySelector('.compare-vendor').value;
+                if (product || vendor) {
+                    requests.push({
+                        product_name: product || null,
+                        vendor_name: vendor || null
+                    });
+                }
+            }
+            
+            if (requests.length < 2) {
+                alert('Please provide at least 2 applications to compare');
+                return;
+            }
+            
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('results').classList.remove('show');
+            
+            try {
+                const response = await fetch('/api/compare', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requests)
+                });
+                
+                const data = await response.json();
+                displayComparison(data);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                document.getElementById('loading').classList.remove('show');
+            }
+        }
+        
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const trustScore = data.trust_score.score;
+            const riskLevel = data.trust_score.risk_level;
+            const scoreClass = trustScore >= 70 ? 'high' : trustScore >= 50 ? 'medium' : 'low';
+            
+            let html = `
+                <h2>Assessment Results: ${data.entity_name}</h2>
+                <p><strong>Vendor:</strong> ${data.vendor_name} | <strong>Category:</strong> ${data.category}</p>
+                
+                <div class="trust-score ${scoreClass}">
+                    <div class="score-value">${trustScore}/100</div>
+                    <div class="risk-level">${riskLevel} Risk</div>
+                    <p>Confidence: ${(data.trust_score.confidence * 100).toFixed(0)}%</p>
+                    <p>${data.trust_score.rationale}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>Security Posture</h3>
+                    <p><strong>Description:</strong> ${data.security_posture.description}</p>
+                    <p><strong>Usage:</strong> ${data.security_posture.usage}</p>
+                    <p><strong>Vendor Reputation:</strong> ${data.security_posture.vendor_reputation}</p>
+                    <p><strong>Data Handling:</strong> ${data.security_posture.data_handling}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>CVE Analysis</h3>
+                    <p><strong>Total CVEs:</strong> ${data.security_posture.cve_summary.total_cves}</p>
+                    <p><strong>Critical:</strong> ${data.security_posture.cve_summary.critical_count} | <strong>High:</strong> ${data.security_posture.cve_summary.high_count}</p>
+                    <p><strong>CISA KEV Entries:</strong> ${data.security_posture.cve_summary.cisa_kev_count}</p>
+                    
+                    ${data.security_posture.cve_summary.recent_cves && data.security_posture.cve_summary.recent_cves.length > 0 ? `
+                    <h4 style="margin-top: 20px;">Detailed CVE List</h4>
+                    <table class="cve-table">
+                        <thead>
+                            <tr>
+                                <th>CVE ID</th>
+                                <th>Severity</th>
+                                <th>CVSS Score</th>
+                                <th>Published</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.security_posture.cve_summary.recent_cves.map(cve => {
+                                const severityClass = cve.severity === 'critical' ? 'cve-critical' : cve.severity === 'high' ? 'cve-high' : '';
+                                return `
+                                <tr>
+                                    <td><a href="https://nvd.nist.gov/vuln/detail/${cve.id}" target="_blank">${cve.id}</a></td>
+                                    <td class="${severityClass}">${cve.severity.toUpperCase()}</td>
+                                    <td>${cve.base_score || 'N/A'}</td>
+                                    <td>${cve.published ? new Date(cve.published).toLocaleDateString() : 'N/A'}</td>
+                                    <td>${cve.description ? (cve.description.length > 150 ? cve.description.substring(0, 150) + '...' : cve.description) : 'N/A'}</td>
+                                </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                    ` : '<p>No CVEs found in the database.</p>'}
+                </div>
+                
+                <div class="section">
+                    <h3>Sources & Information</h3>
+                    <div class="sources-list">
+                        <p><strong>Data Sources Used:</strong></p>
+                        ${data.security_posture.citations.length > 0 ? `
+                        <ul>
+                            ${data.security_posture.citations.map(citation => {
+                                const sourceClass = citation.is_vendor_stated ? 'vendor' : 'independent';
+                                return `
+                                <li class="source-item ${sourceClass}">
+                                    <strong>${citation.source_type}</strong> ${citation.is_vendor_stated ? '(Vendor-stated)' : '(Independent)'}<br>
+                                    <a href="${citation.source}" target="_blank">${citation.source}</a><br>
+                                    <em>${citation.claim}</em>
+                                </li>
+                                `;
+                            }).join('')}
+                        </ul>
+                        ` : '<p>No sources available.</p>'}
+                    </div>
+                </div>
+            `;
+            
+            // Add export buttons
+            html += `
+                <div class="export-buttons">
+                    <button class="export-btn" onclick="exportReport('markdown')">📄 Export as Markdown</button>
+                    <button class="export-btn" onclick="exportReport('pdf')">📑 Export as PDF/HTML</button>
+                </div>
+            `;
+            
+            
+            if (data.alternatives.length > 0) {
+                html += '<div class="section"><h3>Safer Alternatives</h3>';
+                data.alternatives.forEach(alt => {
+                    html += `<p><strong>${alt.name}</strong> (${alt.vendor})<br>${alt.rationale}</p>`;
+                });
+                html += '</div>';
+            }
+            
+            resultsDiv.innerHTML = html;
+            resultsDiv.classList.add('show');
+        }
+        
+        function displayComparison(data) {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>Comparison Results</h2><table class="comparison-table"><thead><tr><th>Application</th><th>Vendor</th><th>Trust Score</th><th>Risk Level</th><th>CVEs</th><th>CISA KEV</th></tr></thead><tbody>';
+            
+            data.assessments.forEach(assessment => {
+                const score = assessment.trust_score.score;
+                html += `<tr>
+                    <td>${assessment.entity_name}</td>
+                    <td>${assessment.vendor_name}</td>
+                    <td>${score}/100</td>
+                    <td>${assessment.trust_score.risk_level}</td>
+                    <td>${assessment.security_posture.cve_summary.total_cves}</td>
+                    <td>${assessment.security_posture.cve_summary.cisa_kev_count}</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            resultsDiv.innerHTML = html;
+            resultsDiv.classList.add('show');
+        }
+        
+        async function exportReport(format) {
+            if (!currentAssessmentData) {
+                alert('No assessment data available to export');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/export/${format}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(currentAssessmentData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Export failed');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const filename = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 
+                                `assessment_${currentAssessmentData.entity_name || 'report'}.${format === 'markdown' ? 'md' : 'html'}`;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                alert('Error exporting report: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
+

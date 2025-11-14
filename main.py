@@ -1,12 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from server.api.routing import router, limiter
+from dotenv import load_dotenv
+import os
 
-app = FastAPI(title="ReputationRecon API")
+# Load environment variables from .env file
+load_dotenv()
+
+app = FastAPI(title="ReputationRecon API", description="AI-powered security assessment tool for CISOs")
+
+# Serve static files (web UI)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Setup CORS
 app.add_middleware(
@@ -27,9 +37,16 @@ app.include_router(router)
 
 @app.get("/")
 async def root():
-    return {"message": "ReputationRecon API is running"}
+    return {"message": "ReputationRecon API is running", "docs": "/docs", "web_ui": "/static/index.html" if os.path.exists("static/index.html") else None}
 
 if __name__ == "__main__":
     import uvicorn
+    print("\n" + "="*60)
+    print("🚀 ReputationRecon API Server Starting...")
+    print("="*60)
+    print(f"📡 Server will be available at: http://localhost:8000")
+    print(f"📚 API Documentation: http://localhost:8000/docs")
+    print(f"🌐 Web UI: http://localhost:8000/static/index.html")
+    print("="*60 + "\n")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 

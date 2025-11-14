@@ -2,7 +2,11 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-/.env
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 
 *.log
@@ -20,4 +24,8 @@ Thumbs.db
 .cache/
 .coverage
 venv/
+
+# Cache database
+*.db
+assessments_cache.db
 
