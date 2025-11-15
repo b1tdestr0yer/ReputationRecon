@@ -519,7 +519,7 @@ Vendor text:
             
             cites.append(Citation(
                 source=vt_url,
-                source_type="independent",
+                source_type="VirusTotal",
                 claim=f"VirusTotal file analysis: {positives}/{total} vendors flagged",
                 is_vendor_stated=False,
                 timestamp=datetime.now()
