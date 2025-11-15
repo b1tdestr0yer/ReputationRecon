@@ -13,19 +13,24 @@ class ExportService:
         citations = posture.get("citations", [])
         alternatives = assessment_data.get("alternatives", [])
         
-        md = f"""# Security Assessment Report: {assessment_data.get('entity_name', 'Unknown')}
+        md = f"""# Security Assessment Report
 
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+## {assessment_data.get('entity_name', 'Unknown')}
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Data Quality:** {assessment_data.get('data_quality', 'unknown').upper()}
 
 ---
 
 ## Executive Summary
 
-**Product:** {assessment_data.get('entity_name', 'Unknown')}  
-**Vendor:** {assessment_data.get('vendor_name', 'Unknown')}  
-**Category:** {assessment_data.get('category', 'Unknown')}  
-**Trust Score:** {trust.get('score', 0)}/100 ({trust.get('risk_level', 'Unknown')} Risk)  
-**Confidence:** {trust.get('confidence', 0):.1%}
+| Field | Value |
+|-------|-------|
+| **Product** | {assessment_data.get('entity_name', 'Unknown')} |
+| **Vendor** | {assessment_data.get('vendor_name', 'Unknown')} |
+| **Category** | {assessment_data.get('category', 'Unknown')} |
+| **Trust Score** | **{trust.get('score', 0)}/100** ({trust.get('risk_level', 'Unknown')} Risk) |
+| **Confidence** | {trust.get('confidence', 0):.1%} |
 
 ### Trust Score Rationale
 {trust.get('rationale', 'N/A')}
@@ -67,8 +72,17 @@ class ExportService:
 **High CVEs:** {cve_summary.get('high_count', 0)}  
 **CISA KEV Entries:** {cve_summary.get('cisa_kev_count', 0)}
 
-### Recent CVEs
 """
+        
+        # Add version-specific CVE information
+        detected_version = cve_summary.get('detected_version')
+        if detected_version:
+            md += f"**Detected Version:** {detected_version}\n"
+            md += f"**Version-Specific CVEs:** {cve_summary.get('version_specific_cves', 0)}\n"
+            md += f"**Version-Specific Critical:** {cve_summary.get('version_specific_critical', 0)}\n"
+            md += f"**Version-Specific High:** {cve_summary.get('version_specific_high', 0)}\n\n"
+        
+        md += "### Recent CVEs\n\n"
         
         recent_cves = cve_summary.get('recent_cves', [])
         if recent_cves:
@@ -93,6 +107,126 @@ class ExportService:
         else:
             md += "No alternatives suggested.\n"
         
+        md += "\n---\n\n## VirusTotal Analysis\n\n"
+        
+        # Try to get VirusTotal data from multiple sources
+        # First try collected_data (if included in export)
+        collected_data = assessment_data.get('collected_data', {})
+        vt = collected_data.get('virustotal') if collected_data else None
+        
+        # If not available, try to extract from citations
+        if not vt:
+            for citation in citations:
+                if citation.get('source_type') == 'VirusTotal':
+                    claim = citation.get('claim', '')
+                    # Extract basic info from claim text
+                    md += f"**VirusTotal Analysis:** {claim}\n\n"
+                    break
+        
+        if vt and vt.get('response_code') == 1:
+            positives = vt.get('positives', 0)
+            total = vt.get('total', 0)
+            malicious = vt.get('malicious', 0)
+            suspicious = vt.get('suspicious', 0)
+            reputation = vt.get('reputation', 0)
+            risk_level = vt.get('risk_level', 'unknown')
+            risk_confidence = vt.get('risk_confidence', 0.5)
+            
+            md += f"**Detection Rate:** {positives}/{total} engines flagged ({malicious} malicious, {suspicious} suspicious)\n"
+            md += f"**Reputation Score:** {reputation}\n"
+            md += f"**Risk Level:** {risk_level} ({int(risk_confidence*100)}% confidence)\n\n"
+            
+            # Executable name
+            exe_name = vt.get('exe_name')
+            if exe_name:
+                md += f"**Executable Name:** {exe_name}\n"
+            
+            # Detected version
+            detected_version = vt.get('detected_version')
+            if detected_version:
+                version_confidence = vt.get('version_confidence', 0.0)
+                md += f"**Detected Version:** {detected_version} (confidence: {int(version_confidence*100)}%)\n"
+            
+            # Community notes
+            community_notes = vt.get('community_notes', [])
+            if community_notes:
+                md += f"\n### Community Notes ({len(community_notes)} available)\n\n"
+                for i, note in enumerate(community_notes[:10], 1):
+                    note_text = note.get('text', '')
+                    note_date = note.get('date', 0)
+                    note_author = note.get('author', '')
+                    if note_text:
+                        md += f"**Note {i}:**\n"
+                        if note_author:
+                            md += f"*By: {note_author}*\n"
+                        if note_date:
+                            try:
+                                date_str = datetime.fromtimestamp(note_date).strftime('%Y-%m-%d')
+                                md += f"*Date: {date_str}*\n"
+                            except:
+                                pass
+                        md += f"{note_text[:500]}{'...' if len(note_text) > 500 else ''}\n\n"
+            
+            # Submission history
+            submission_history = vt.get('submission_history', [])
+            if submission_history:
+                md += f"\n### Submission History ({len(submission_history)} entries)\n\n"
+                for i, submission in enumerate(submission_history[:5], 1):
+                    sub_date = submission.get('date', 0)
+                    sub_names = submission.get('submission_names', [])
+                    if sub_names:
+                        md += f"**Submission {i}:**\n"
+                        if sub_date:
+                            try:
+                                date_str = datetime.fromtimestamp(sub_date).strftime('%Y-%m-%d')
+                                md += f"*Date: {date_str}*\n"
+                            except:
+                                pass
+                        md += f"*File names: {', '.join(sub_names[:5])}*\n\n"
+            
+            # File details
+            file_details = vt.get('file_details', {})
+            if file_details:
+                md += "\n### File Details\n\n"
+                pe_info = file_details.get('pe_info', {})
+                if pe_info and isinstance(pe_info, dict):
+                    version_info = pe_info.get('version_info', {})
+                    if isinstance(version_info, dict):
+                        product_name = version_info.get('ProductName') or version_info.get('product_name')
+                        product_version = version_info.get('ProductVersion') or version_info.get('product_version')
+                        if product_name:
+                            md += f"**PE Product Name:** {product_name}\n"
+                        if product_version:
+                            md += f"**PE Product Version:** {product_version}\n"
+                
+                signature_info = file_details.get('signature_info', {})
+                if signature_info:
+                    md += "**Digital Signature:** Information available\n"
+        else:
+            md += "No VirusTotal data available.\n"
+        
+        md += "\n---\n\n## Trust Score Factors\n\n"
+        
+        # Add trust score factors
+        factors = trust.get('factors', {})
+        if factors:
+            positive_factors = {k: v for k, v in factors.items() if v > 0}
+            negative_factors = {k: v for k, v in factors.items() if v < 0}
+            
+            if positive_factors:
+                md += "### Positive Factors\n\n"
+                for factor, value in sorted(positive_factors.items(), key=lambda x: x[1], reverse=True):
+                    md += f"- **{factor.replace('_', ' ').title()}:** +{value}\n"
+                md += "\n"
+            
+            if negative_factors:
+                md += "### Negative Factors\n\n"
+                for factor, value in sorted(negative_factors.items(), key=lambda x: x[1]):
+                    md += f"- **{factor.replace('_', ' ').title()}:** {value}\n"
+                md += "\n"
+        else:
+            md += "No detailed factors available.\n"
+        
         md += "\n---\n\n## Sources & Citations\n\n"
         
         if citations:
@@ -103,18 +237,21 @@ class ExportService:
                 md += "### Vendor-Stated Sources\n\n"
                 for citation in vendor_citations:
                     md += f"- **{citation.get('source_type', 'Unknown')}**: [{citation.get('source', 'N/A')}]({citation.get('source', '#')})\n"
-                    md += f"  - Claim: {citation.get('claim', 'N/A')}\n\n"
+                    md += f"  - *{citation.get('claim', 'N/A')}*\n\n"
             
             if independent_citations:
                 md += "### Independent Sources\n\n"
                 for citation in independent_citations:
                     md += f"- **{citation.get('source_type', 'Unknown')}**: [{citation.get('source', 'N/A')}]({citation.get('source', '#')})\n"
-                    md += f"  - Claim: {citation.get('claim', 'N/A')}\n\n"
+                    md += f"  - *{citation.get('claim', 'N/A')}*\n\n"
         else:
             md += "No citations available.\n"
         
-        md += f"\n---\n\n**Data Quality:** {assessment_data.get('data_quality', 'unknown')}  \n"
-        md += f"**Assessment Timestamp:** {assessment_data.get('assessment_timestamp', 'N/A')}\n"
+        md += f"\n---\n\n## Report Metadata\n\n"
+        md += f"- **Assessment Timestamp:** {assessment_data.get('assessment_timestamp', 'N/A')}\n"
+        md += f"- **Report Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if assessment_data.get('cache_key'):
+            md += f"- **Cache Key:** {assessment_data.get('cache_key')}\n"
         
         return md
     
@@ -135,36 +272,50 @@ class ExportService:
     <meta charset="UTF-8">
     <title>Security Assessment: {assessment_data.get('entity_name', 'Unknown')}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
-        h1 {{ color: #333; border-bottom: 3px solid {risk_color}; padding-bottom: 10px; }}
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; background: #f5f5f5; }}
+        .container {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; border-bottom: 3px solid {risk_color}; padding-bottom: 10px; margin-top: 0; }}
         h2 {{ color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }}
         h3 {{ color: #666; margin-top: 20px; }}
-        .score-box {{ background: {risk_color}; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }}
-        .score-value {{ font-size: 48px; font-weight: bold; }}
+        .header-info {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+        .header-info table {{ margin: 0; }}
+        .header-info td {{ border: none; padding: 5px 15px; }}
+        .score-box {{ background: {risk_color}; color: white; padding: 30px; border-radius: 8px; text-align: center; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .score-value {{ font-size: 56px; font-weight: bold; margin: 10px 0; }}
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
         th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
         th {{ background-color: #f2f2f2; font-weight: bold; }}
-        .citation {{ margin: 10px 0; padding: 10px; background: #f9f9f9; border-left: 4px solid #007bff; }}
+        .citation {{ margin: 10px 0; padding: 12px; background: #f9f9f9; border-left: 4px solid #007bff; border-radius: 4px; }}
         .vendor-citation {{ border-left-color: #28a745; }}
         .independent-citation {{ border-left-color: #ffc107; }}
         .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+        .section-box {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }}
     </style>
 </head>
 <body>
+    <div class="container">
     <h1>Security Assessment Report</h1>
-    <p><strong>Product:</strong> {assessment_data.get('entity_name', 'Unknown')}<br>
-    <strong>Vendor:</strong> {assessment_data.get('vendor_name', 'Unknown')}<br>
-    <strong>Category:</strong> {assessment_data.get('category', 'Unknown')}<br>
-    <strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    
+    <div class="header-info">
+        <table>
+            <tr><td><strong>Product:</strong></td><td>{assessment_data.get('entity_name', 'Unknown')}</td></tr>
+            <tr><td><strong>Vendor:</strong></td><td>{assessment_data.get('vendor_name', 'Unknown')}</td></tr>
+            <tr><td><strong>Category:</strong></td><td>{assessment_data.get('category', 'Unknown')}</td></tr>
+            <tr><td><strong>Data Quality:</strong></td><td>{assessment_data.get('data_quality', 'unknown').upper()}</td></tr>
+            <tr><td><strong>Generated:</strong></td><td>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td></tr>
+        </table>
+    </div>
     
     <div class="score-box">
         <div class="score-value">{score}/100</div>
-        <div style="font-size: 24px;">{trust.get('risk_level', 'Unknown')} Risk</div>
-        <div>Confidence: {trust.get('confidence', 0):.1%}</div>
+        <div style="font-size: 28px; margin-top: 10px;">{trust.get('risk_level', 'Unknown')} Risk</div>
+        <div style="font-size: 18px; margin-top: 10px; opacity: 0.9;">Confidence: {trust.get('confidence', 0):.1%}</div>
     </div>
     
     <h2>Executive Summary</h2>
-    <p>{trust.get('rationale', 'N/A')}</p>
+    <div class="section-box">
+        <p>{trust.get('rationale', 'N/A')}</p>
+    </div>
     
     <h2>Security Posture</h2>
     <h3>Description</h3>
@@ -197,7 +348,17 @@ class ExportService:
         <tr><td>Critical CVEs</td><td>{cve_summary.get('critical_count', 0)}</td></tr>
         <tr><td>High CVEs</td><td>{cve_summary.get('high_count', 0)}</td></tr>
         <tr><td>CISA KEV Entries</td><td>{cve_summary.get('cisa_kev_count', 0)}</td></tr>
-    </table>
+"""
+        
+        # Add version-specific CVE information
+        detected_version = cve_summary.get('detected_version')
+        if detected_version:
+            html += f"<tr><td>Detected Version</td><td>{detected_version}</td></tr>"
+            html += f"<tr><td>Version-Specific CVEs</td><td>{cve_summary.get('version_specific_cves', 0)}</td></tr>"
+            html += f"<tr><td>Version-Specific Critical</td><td>{cve_summary.get('version_specific_critical', 0)}</td></tr>"
+            html += f"<tr><td>Version-Specific High</td><td>{cve_summary.get('version_specific_high', 0)}</td></tr>"
+        
+        html += """    </table>
 """
         
         recent_cves = cve_summary.get('recent_cves', [])
@@ -210,6 +371,129 @@ class ExportService:
                 desc = cve.get('description', 'N/A')[:150] + "..." if len(cve.get('description', '')) > 150 else cve.get('description', 'N/A')
                 html += f"<tr><td>{cve_id}</td><td>{severity}</td><td>{score}</td><td>{desc}</td></tr>"
             html += "</table>"
+        
+        # Add VirusTotal Analysis section
+        html += "<h2>VirusTotal Analysis</h2>"
+        
+        # Try to get VirusTotal data from multiple sources
+        collected_data = assessment_data.get('collected_data', {})
+        vt = collected_data.get('virustotal') if collected_data else None
+        
+        # If not available, try to extract from citations
+        if not vt:
+            for citation in citations:
+                if citation.get('source_type') == 'VirusTotal':
+                    claim = citation.get('claim', '')
+                    html += f"<p><strong>VirusTotal Analysis:</strong> {claim}</p>"
+                    break
+        
+        if vt and vt.get('response_code') == 1:
+            positives = vt.get('positives', 0)
+            total = vt.get('total', 0)
+            malicious = vt.get('malicious', 0)
+            suspicious = vt.get('suspicious', 0)
+            reputation = vt.get('reputation', 0)
+            risk_level = vt.get('risk_level', 'unknown')
+            risk_confidence = vt.get('risk_confidence', 0.5)
+            
+            html += f"<p><strong>Detection Rate:</strong> {positives}/{total} engines flagged ({malicious} malicious, {suspicious} suspicious)<br>"
+            html += f"<strong>Reputation Score:</strong> {reputation}<br>"
+            html += f"<strong>Risk Level:</strong> {risk_level} ({int(risk_confidence*100)}% confidence)</p>"
+            
+            # Executable name
+            exe_name = vt.get('exe_name')
+            if exe_name:
+                html += f"<p><strong>Executable Name:</strong> {exe_name}</p>"
+            
+            # Detected version
+            detected_version = vt.get('detected_version')
+            if detected_version:
+                version_confidence = vt.get('version_confidence', 0.0)
+                html += f"<p><strong>Detected Version:</strong> {detected_version} (confidence: {int(version_confidence*100)}%)</p>"
+            
+            # Community notes
+            community_notes = vt.get('community_notes', [])
+            if community_notes:
+                html += f"<h3>Community Notes ({len(community_notes)} available)</h3>"
+                for i, note in enumerate(community_notes[:10], 1):
+                    note_text = note.get('text', '')
+                    note_date = note.get('date', 0)
+                    note_author = note.get('author', '')
+                    if note_text:
+                        html += f'<div class="citation" style="margin: 15px 0;">'
+                        html += f'<strong>Note {i}</strong>'
+                        if note_author:
+                            html += f' <em>by {note_author}</em>'
+                        if note_date:
+                            try:
+                                date_str = datetime.fromtimestamp(note_date).strftime('%Y-%m-%d')
+                                html += f' <em>({date_str})</em>'
+                            except:
+                                pass
+                        html += f'<br>{note_text[:500]}{"..." if len(note_text) > 500 else ""}</div>'
+            
+            # Submission history
+            submission_history = vt.get('submission_history', [])
+            if submission_history:
+                html += f"<h3>Submission History ({len(submission_history)} entries)</h3>"
+                html += "<table><tr><th>#</th><th>Date</th><th>File Names</th></tr>"
+                for i, submission in enumerate(submission_history[:5], 1):
+                    sub_date = submission.get('date', 0)
+                    sub_names = submission.get('submission_names', [])
+                    date_str = ""
+                    if sub_date:
+                        try:
+                            date_str = datetime.fromtimestamp(sub_date).strftime('%Y-%m-%d')
+                        except:
+                            pass
+                    names_str = ', '.join(sub_names[:5]) if sub_names else 'N/A'
+                    html += f"<tr><td>{i}</td><td>{date_str}</td><td>{names_str}</td></tr>"
+                html += "</table>"
+            
+            # File details
+            file_details = vt.get('file_details', {})
+            if file_details:
+                html += "<h3>File Details</h3>"
+                pe_info = file_details.get('pe_info', {})
+                if pe_info and isinstance(pe_info, dict):
+                    version_info = pe_info.get('version_info', {})
+                    if isinstance(version_info, dict):
+                        product_name = version_info.get('ProductName') or version_info.get('product_name')
+                        product_version = version_info.get('ProductVersion') or version_info.get('product_version')
+                        if product_name or product_version:
+                            html += "<p>"
+                            if product_name:
+                                html += f"<strong>PE Product Name:</strong> {product_name}<br>"
+                            if product_version:
+                                html += f"<strong>PE Product Version:</strong> {product_version}<br>"
+                            html += "</p>"
+                
+                signature_info = file_details.get('signature_info', {})
+                if signature_info:
+                    html += "<p><strong>Digital Signature:</strong> Information available</p>"
+        else:
+            html += "<p>No VirusTotal data available.</p>"
+        
+        # Add Trust Score Factors
+        html += "<h2>Trust Score Factors</h2>"
+        factors = trust.get('factors', {})
+        if factors:
+            positive_factors = {k: v for k, v in factors.items() if v > 0}
+            negative_factors = {k: v for k, v in factors.items() if v < 0}
+            
+            if positive_factors:
+                html += "<h3>Positive Factors</h3><ul>"
+                for factor, value in sorted(positive_factors.items(), key=lambda x: x[1], reverse=True):
+                    html += f"<li><strong>{factor.replace('_', ' ').title()}:</strong> +{value}</li>"
+                html += "</ul>"
+            
+            if negative_factors:
+                html += "<h3>Negative Factors</h3><ul>"
+                for factor, value in sorted(negative_factors.items(), key=lambda x: x[1]):
+                    html += f"<li><strong>{factor.replace('_', ' ').title()}:</strong> {value}</li>"
+                html += "</ul>"
+        else:
+            html += "<p>No detailed factors available.</p>"
         
         if alternatives:
             html += "<h2>Safer Alternatives</h2>"
@@ -239,8 +523,15 @@ class ExportService:
         
         html += f"""
     <div class="footer">
-        <p>Data Quality: {assessment_data.get('data_quality', 'unknown')}<br>
-        Assessment Timestamp: {assessment_data.get('assessment_timestamp', 'N/A')}</p>
+        <h3>Report Metadata</h3>
+        <p><strong>Assessment Timestamp:</strong> {assessment_data.get('assessment_timestamp', 'N/A')}<br>
+        <strong>Report Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>"""
+        
+        if assessment_data.get('cache_key'):
+            html += f"<strong>Cache Key:</strong> {assessment_data.get('cache_key')}<br>"
+        
+        html += """</p>
+    </div>
     </div>
 </body>
 </html>"""
