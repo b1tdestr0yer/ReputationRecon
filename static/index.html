@@ -618,7 +618,7 @@
                     </div>
                     
                     ${data.security_posture.cve_summary.recent_cves && data.security_posture.cve_summary.recent_cves.length > 0 ? `
-                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Detailed CVE List</h4>
+                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Detailed CVE List ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `(Showing ${data.security_posture.cve_summary.recent_cves.length} of ${data.security_posture.cve_summary.total_cves} total)` : ''}</h4>
                     <table class="cve-table">
                         <thead>
                             <tr>
@@ -644,8 +644,52 @@
                             }).join('')}
                         </tbody>
                     </table>
+                    ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `<p style="color: #666; font-style: italic; margin-top: 10px;">Note: Only the most recent ${data.security_posture.cve_summary.recent_cves.length} CVEs are shown. <a href="https://nvd.nist.gov/vuln/search/results?query=${encodeURIComponent(data.entity_name || '')}" target="_blank">View all ${data.security_posture.cve_summary.total_cves} CVEs on NVD</a></p>` : ''}
                     ` : '<p style="color: #666; font-style: italic;">No CVEs found in the database.</p>'}
                 </div>
+                
+                ${(() => {
+                    const bugBountyCitations = data.security_posture.citations.filter(c => 
+                        c.source_type === 'HackerOne' || c.source_type === 'Bugcrowd'
+                    );
+                    if (bugBountyCitations.length > 0) {
+                        const h1Count = bugBountyCitations.filter(c => c.source_type === 'HackerOne').length;
+                        const bcCount = bugBountyCitations.filter(c => c.source_type === 'Bugcrowd').length;
+                        return `
+                <div class="section">
+                    <h3><i class="fas fa-shield-alt"></i> Bug Bounty Reports</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: white; padding: 15px; border-radius: 8px; text-align: center; border-top: 4px solid #ff5722;">
+                            <div style="font-size: 2em; font-weight: bold; color: #ff5722;">${bugBountyCitations.length}</div>
+                            <div style="color: #666; margin-top: 5px;">Total Reports</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; text-align: center; border-top: 4px solid #ff9800;">
+                            <div style="font-size: 2em; font-weight: bold; color: #ff9800;">${h1Count}</div>
+                            <div style="color: #666; margin-top: 5px;">HackerOne</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; text-align: center; border-top: 4px solid #9c27b0;">
+                            <div style="font-size: 2em; font-weight: bold; color: #9c27b0;">${bcCount}</div>
+                            <div style="color: #666; margin-top: 5px;">Bugcrowd</div>
+                        </div>
+                    </div>
+                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Public Bug Bounty Reports</h4>
+                    <div class="sources-list">
+                        ${bugBountyCitations.map(citation => {
+                            const isUrl = citation.source && citation.source.startsWith('http');
+                            return `
+                        <div class="source-item independent">
+                            <strong>${citation.source_type}</strong> <span style="color: #ffc107;">(Independent)</span><br>
+                            ${isUrl ? `<a href="${citation.source}" target="_blank" rel="noopener noreferrer" style="color: #667eea;">${citation.source}</a>` : `<span>${citation.source}</span>`}<br>
+                            <em style="color: #666;">${citation.claim}</em>
+                        </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                        `;
+                    }
+                    return '';
+                })()}
                 
                 <div class="section">
                     <h3><i class="fas fa-book"></i> Sources & Information</h3>

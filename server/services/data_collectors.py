@@ -1048,6 +1048,152 @@ class WebSearchCollector(DataCollector):
         return []
 
 
+class BugBountyCollector(DataCollector):
+    """Collect public bug bounty reports from HackerOne and Bugcrowd"""
+    
+    async def search_hackerone(self, product_name: str, vendor_name: str) -> List[Dict]:
+        """Search HackerOne public hacktivity for bug reports"""
+        print(f"[Bug Bounty Collector] Searching HackerOne for: {product_name}, {vendor_name}")
+        reports = []
+        
+        try:
+            # HackerOne public hacktivity API endpoint
+            # Search terms: product name and vendor name
+            search_terms = [product_name, vendor_name]
+            
+            for term in search_terms:
+                if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
+                    continue
+                
+                # HackerOne hacktivity search (public endpoint)
+                # Note: This is a simplified search - in production you might need API key for more results
+                url = "https://hackerone.com/hacktivity"
+                params = {
+                    "querystring": term,
+                    "type": "public"
+                }
+                
+                # Use web search approach since HackerOne doesn't have a simple public API
+                # We'll search for public reports via their hacktivity page
+                search_url = f"https://hackerone.com/hacktivity?querystring={term.replace(' ', '+')}"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
+                        response = await client.get(search_url)
+                        if response.status_code == 200:
+                            content = response.text
+                            
+                            # Parse HTML to extract report information
+                            # Look for report links and titles
+                            # Find report links (simplified pattern)
+                            report_pattern = r'href="(/reports/[^"]+)"'
+                            title_pattern = r'<a[^>]*href="/reports/[^"]+"[^>]*>([^<]+)</a>'
+                            
+                            report_links = re.findall(report_pattern, content)
+                            titles = re.findall(title_pattern, content)
+                            
+                            for i, link in enumerate(report_links[:10]):  # Limit to 10 reports
+                                report_url = f"https://hackerone.com{link}"
+                                title = titles[i] if i < len(titles) else "Bug Report"
+                                
+                                reports.append({
+                                    "platform": "HackerOne",
+                                    "title": title,
+                                    "url": report_url,
+                                    "product": term
+                                })
+                            
+                            if report_links:
+                                print(f"[Bug Bounty Collector] Found {len(report_links)} HackerOne reports for: {term}")
+                except Exception as e:
+                    print(f"[Bug Bounty Collector] Error searching HackerOne for {term}: {e}")
+        
+        except Exception as e:
+            print(f"[Bug Bounty Collector] Error in HackerOne search: {e}")
+        
+        return reports
+    
+    async def search_bugcrowd(self, product_name: str, vendor_name: str) -> List[Dict]:
+        """Search Bugcrowd public vulnerability disclosures"""
+        print(f"[Bug Bounty Collector] Searching Bugcrowd for: {product_name}, {vendor_name}")
+        reports = []
+        
+        try:
+            search_terms = [product_name, vendor_name]
+            
+            for term in search_terms:
+                if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
+                    continue
+                
+                # Bugcrowd public vulnerability disclosure search
+                search_url = f"https://bugcrowd.com/disclosures?q={term.replace(' ', '+')}"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
+                        response = await client.get(search_url)
+                        if response.status_code == 200:
+                            content = response.text
+                            
+                            # Parse HTML to extract disclosure information
+                            # Find disclosure links
+                            disclosure_pattern = r'href="(/[^"]+/disclosure/[^"]+)"'
+                            title_pattern = r'<a[^>]*href="/[^"]+/disclosure/[^"]+"[^>]*>([^<]+)</a>'
+                            
+                            disclosure_links = re.findall(disclosure_pattern, content)
+                            titles = re.findall(title_pattern, content)
+                            
+                            for i, link in enumerate(disclosure_links[:10]):  # Limit to 10 reports
+                                report_url = f"https://bugcrowd.com{link}"
+                                title = titles[i] if i < len(titles) else "Vulnerability Disclosure"
+                                
+                                reports.append({
+                                    "platform": "Bugcrowd",
+                                    "title": title,
+                                    "url": report_url,
+                                    "product": term
+                                })
+                            
+                            if disclosure_links:
+                                print(f"[Bug Bounty Collector] Found {len(disclosure_links)} Bugcrowd reports for: {term}")
+                except Exception as e:
+                    print(f"[Bug Bounty Collector] Error searching Bugcrowd for {term}: {e}")
+        
+        except Exception as e:
+            print(f"[Bug Bounty Collector] Error in Bugcrowd search: {e}")
+        
+        return reports
+    
+    async def search_bug_bounties(self, product_name: str, vendor_name: str) -> Dict[str, Any]:
+        """Search both HackerOne and Bugcrowd for public bug bounty reports"""
+        print(f"[Bug Bounty Collector] Searching bug bounty platforms for: {product_name} ({vendor_name})")
+        
+        # Search both platforms in parallel
+        hackerone_reports = await self.search_hackerone(product_name, vendor_name)
+        bugcrowd_reports = await self.search_bugcrowd(product_name, vendor_name)
+        
+        all_reports = hackerone_reports + bugcrowd_reports
+        
+        # Remove duplicates based on URL
+        seen_urls = set()
+        unique_reports = []
+        for report in all_reports:
+            url = report.get("url", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_reports.append(report)
+        
+        result = {
+            "total_reports": len(unique_reports),
+            "hackerone_count": len(hackerone_reports),
+            "bugcrowd_count": len(bugcrowd_reports),
+            "reports": unique_reports
+        }
+        
+        print(f"[Bug Bounty Collector] ✓ Found {len(unique_reports)} total bug bounty reports ({len(hackerone_reports)} HackerOne, {len(bugcrowd_reports)} Bugcrowd)")
+        
+        return result
+
+
 class EntityResolver:
     """Resolve entity and vendor identity from input"""
     

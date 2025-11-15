@@ -4,7 +4,8 @@ from server.dtos.AssessmentResponse import AssessmentResponse, SoftwareCategory
 from server.services.cache import AssessmentCache
 from server.services.data_collectors import (
     CVECollector, VendorPageCollector, VirusTotalCollector,
-    WebSearchCollector, EntityResolver, CIRCLHashlookupCollector
+    WebSearchCollector, EntityResolver, CIRCLHashlookupCollector,
+    BugBountyCollector
 )
 from server.services.classifier import SoftwareClassifier
 from server.services.ai_synthesizer import AISynthesizer
@@ -21,6 +22,7 @@ class AssessmentService:
         self.vt_collector = VirusTotalCollector()
         self.hashlookup_collector = CIRCLHashlookupCollector()
         self.web_collector = WebSearchCollector()
+        self.bugbounty_collector = BugBountyCollector()
         self.entity_resolver = EntityResolver()
         self.classifier = SoftwareClassifier()
         self.synthesizer = AISynthesizer()
@@ -96,6 +98,11 @@ class AssessmentService:
             print(f"  - VirusTotal: ✓{exe_info}")
         else:
             print(f"  - VirusTotal: ✗")
+        bug_bounties = collected_data.get('bug_bounties', {})
+        if bug_bounties and bug_bounties.get('total_reports', 0) > 0:
+            print(f"  - Bug Bounties: ✓ ({bug_bounties.get('total_reports', 0)} reports: {bug_bounties.get('hackerone_count', 0)} HackerOne, {bug_bounties.get('bugcrowd_count', 0)} Bugcrowd)")
+        else:
+            print(f"  - Bug Bounties: ✗")
         hashlookup_info = collected_data.get('hashlookup')
         if hashlookup_info and hashlookup_info.get('found'):
             version = hashlookup_info.get('product_version', '') or 'unknown'
@@ -248,6 +255,10 @@ class AssessmentService:
         print(f"  → Queueing incident search...")
         tasks.append(self.web_collector.search_incidents(entity_name, vendor_name))
         
+        # Bug bounty reports
+        print(f"  → Queueing bug bounty search...")
+        tasks.append(self.bugbounty_collector.search_bug_bounties(entity_name, vendor_name))
+        
         # Execute all tasks
         print(f"[Assessment Service] Executing {len(tasks)} data collection tasks in parallel...")
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -261,6 +272,7 @@ class AssessmentService:
         vt_report = results[4] if not isinstance(results[4], Exception) else None
         hashlookup_info = results[5] if not isinstance(results[5], Exception) else None
         incidents = results[6] if not isinstance(results[6], Exception) else []
+        bug_bounties = results[7] if not isinstance(results[7], Exception) else {}
         
         # Extract latest version from vendor page if available (prefer this as it's the "latest" version)
         product_version = None
@@ -341,6 +353,7 @@ class AssessmentService:
             "virustotal": vt_report,
             "hashlookup": hashlookup_info,
             "incidents": incidents,
+            "bug_bounties": bug_bounties,
             "hash": hash,  # Store hash for building URLs in citations
             "exe_name": exe_name  # Executable name from VirusTotal
         }
