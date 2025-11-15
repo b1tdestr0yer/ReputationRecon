@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ReputationRecon - Security Assessment Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -290,6 +291,27 @@
         .source-item.independent {
             border-left-color: #ffc107;
         }
+        
+        .spider-chart-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .spider-chart-container h3 {
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+        
+        .spider-chart-wrapper {
+            position: relative;
+            height: 400px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
@@ -497,6 +519,13 @@
                     <p>${data.trust_score.rationale || 'No rationale provided'}</p>
                 </div>
                 
+                <div class="spider-chart-container">
+                    <h3>Risk Assessment Breakdown</h3>
+                    <div class="spider-chart-wrapper">
+                        <canvas id="spiderChart"></canvas>
+                    </div>
+                </div>
+                
                 <div class="section">
                     <h3>Security Posture</h3>
                     <p><strong>Description:</strong> ${data.security_posture.description}</p>
@@ -592,6 +621,334 @@
             
             resultsDiv.innerHTML = html;
             resultsDiv.classList.add('show');
+            
+            // Render spider chart after HTML is inserted
+            renderSpiderChart(data);
+        }
+        
+        function renderSpiderChart(data) {
+            const canvas = document.getElementById('spiderChart');
+            if (!canvas) return;
+            
+            // Calculate scores for each category (0-100 scale)
+            const scores = calculateSpiderChartScores(data);
+            
+            // Destroy existing chart if it exists
+            if (window.spiderChartInstance) {
+                window.spiderChartInstance.destroy();
+            }
+            
+            // Helper function to get color based on score
+            function getColorForScore(score) {
+                if (score >= 70) {
+                    return { bg: 'rgba(40, 167, 69, 0.2)', border: 'rgba(40, 167, 69, 1)', point: 'rgba(40, 167, 69, 1)' }; // Green
+                } else if (score >= 50) {
+                    return { bg: 'rgba(255, 193, 7, 0.2)', border: 'rgba(255, 193, 7, 1)', point: 'rgba(255, 193, 7, 1)' }; // Yellow/Orange
+                } else {
+                    return { bg: 'rgba(220, 53, 69, 0.2)', border: 'rgba(220, 53, 69, 1)', point: 'rgba(220, 53, 69, 1)' }; // Red
+                }
+            }
+            
+            // Create datasets with individual colors for each point
+            const scoreValues = [
+                scores.virustotal,
+                scores.cves,
+                scores.aiScan,
+                scores.vendorTrust,
+                scores.informationQuantity
+            ];
+            
+            const colors = scoreValues.map(score => getColorForScore(score));
+            
+            const ctx = canvas.getContext('2d');
+            window.spiderChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['VirusTotal', 'CVEs', 'AI Scan', 'Vendor Trust', 'Information Quantity'],
+                    datasets: [{
+                        label: 'Score',
+                        data: scoreValues,
+                        backgroundColor: 'rgba(102, 126, 234, 0.15)',
+                        borderColor: 'rgba(102, 126, 234, 0.8)',
+                        borderWidth: 2,
+                        pointBackgroundColor: colors.map(c => c.point),
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: colors.map(c => c.border),
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            min: 0,
+                            ticks: {
+                                stepSize: 20,
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 13,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.parsed.r.toFixed(0);
+                                    return label + ': ' + value + '/100';
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            borderWidth: 2
+                        }
+                    }
+                }
+            });
+        }
+        
+        function calculateSpiderChartScores(data) {
+            // VirusTotal Score (0-100, higher is better/cleaner)
+            // Based on positives/total ratio - lower positives = higher score
+            let virustotalScore = 50; // Default if no data
+            const citations = data.security_posture?.citations || [];
+            const vtCitation = citations.find(c => {
+                const claim = c.claim || '';
+                return (c.source_type === 'independent' || c.source && c.source.includes('virustotal')) && 
+                       claim.toLowerCase().includes('virustotal');
+            });
+            if (vtCitation && vtCitation.claim) {
+                // Try multiple regex patterns to match different formats
+                const patterns = [
+                    /(\d+)\/(\d+)\s+vendors?\s+flagged/i,
+                    /(\d+)\s*\/\s*(\d+)/,
+                    /(\d+)\s+of\s+(\d+)/i
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = vtCitation.claim.match(pattern);
+                    if (match) {
+                        const positives = parseInt(match[1]);
+                        const total = parseInt(match[2]);
+                        if (total > 0) {
+                            // Score: 100 if 0 positives, decreasing as positives increase
+                            // Formula: (1 - positives/total) * 100, but cap at reasonable values
+                            const ratio = positives / total;
+                            virustotalScore = Math.max(0, Math.min(100, (1 - ratio) * 100));
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // CVEs Score (0-100, higher is better = fewer/severe CVEs)
+            // Based on total CVEs, critical/high counts, and CISA KEV
+            let cvesScore = 50; // Default
+            const cveSummary = data.security_posture?.cve_summary || {};
+            const totalCves = cveSummary.total_cves || 0;
+            const criticalCount = cveSummary.critical_count || 0;
+            const highCount = cveSummary.high_count || 0;
+            const cisaKevCount = cveSummary.cisa_kev_count || 0;
+            
+            if (totalCves === 0) {
+                cvesScore = 100; // No CVEs = perfect score
+            } else {
+                // Penalize based on severity and count
+                // Base score starts at 100, subtract penalties
+                let penalty = 0;
+                penalty += Math.min(30, totalCves * 2); // Up to 30 points for total count
+                penalty += criticalCount * 15; // 15 points per critical
+                penalty += highCount * 8; // 8 points per high
+                penalty += cisaKevCount * 20; // 20 points per CISA KEV (actively exploited)
+                cvesScore = Math.max(0, 100 - penalty);
+            }
+            
+            // AI Scan Score (0-100, comprehensive analysis of all gathered data)
+            // This should analyze all security signals: CVEs, VirusTotal, vendor info, incidents, etc.
+            let aiScanScore = 60; // Start with neutral score
+            
+            // Analyze CVE data (reuse cveSummary from above)
+            const versionSpecificCves = cveSummary.version_specific_cves || 0;
+            const versionSpecificCritical = cveSummary.version_specific_critical || 0;
+            
+            // CVE impact (version-specific CVEs are more concerning)
+            if (versionSpecificCves > 0) {
+                if (versionSpecificCritical > 5) {
+                    aiScanScore -= 30;
+                } else if (versionSpecificCritical > 0) {
+                    aiScanScore -= 20;
+                } else if (versionSpecificCves > 10) {
+                    aiScanScore -= 15;
+                } else if (versionSpecificCves > 5) {
+                    aiScanScore -= 10;
+                } else {
+                    aiScanScore -= 5;
+                }
+            } else if (totalCves > 0) {
+                // General CVEs (less weight than version-specific)
+                if (criticalCount > 5) {
+                    aiScanScore -= 20;
+                } else if (criticalCount > 0) {
+                    aiScanScore -= 12;
+                } else if (highCount > 10) {
+                    aiScanScore -= 10;
+                } else if (highCount > 0) {
+                    aiScanScore -= 5;
+                } else if (totalCves > 20) {
+                    aiScanScore -= 5;
+                }
+            } else {
+                // No CVEs is a positive signal
+                aiScanScore += 10;
+            }
+            
+            // CISA KEV entries are very concerning (actively exploited)
+            if (cisaKevCount > 0) {
+                aiScanScore -= (cisaKevCount * 15);
+            }
+            
+            // VirusTotal impact (reuse vtCitation from above if available, otherwise find it)
+            let aiVtCitation = vtCitation;
+            if (!aiVtCitation) {
+                aiVtCitation = citations.find(c => {
+                    const claim = c.claim || '';
+                    return (c.source_type === 'independent' || c.source && c.source.includes('virustotal')) && 
+                           claim.toLowerCase().includes('virustotal');
+                });
+            }
+            if (aiVtCitation && aiVtCitation.claim) {
+                const patterns = [
+                    /(\d+)\/(\d+)\s+vendors?\s+flagged/i,
+                    /(\d+)\s*\/\s*(\d+)/,
+                    /(\d+)\s+of\s+(\d+)/i
+                ];
+                for (const pattern of patterns) {
+                    const match = aiVtCitation.claim.match(pattern);
+                    if (match) {
+                        const positives = parseInt(match[1]);
+                        const total = parseInt(match[2]);
+                        if (total > 0) {
+                            const ratio = positives / total;
+                            if (ratio > 0.1) { // More than 10% flagged
+                                aiScanScore -= 25;
+                            } else if (ratio > 0.05) { // 5-10% flagged
+                                aiScanScore -= 15;
+                            } else if (ratio > 0) { // Some flags but low
+                                aiScanScore -= 5;
+                            } else {
+                                // Clean scan is positive
+                                aiScanScore += 5;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Vendor reputation and trust signals
+            const vendorReputation = data.security_posture?.vendor_reputation || '';
+            const incidentsAbuse = data.security_posture?.incidents_abuse || '';
+            
+            // Check for negative signals in vendor reputation
+            const negativeKeywords = ['concern', 'incident', 'breach', 'vulnerability', 'exploit', 'malware', 'suspicious'];
+            const reputationLower = vendorReputation.toLowerCase();
+            const incidentsLower = incidentsAbuse.toLowerCase();
+            
+            let negativeSignals = 0;
+            negativeKeywords.forEach(keyword => {
+                if (reputationLower.includes(keyword) || incidentsLower.includes(keyword)) {
+                    negativeSignals++;
+                }
+            });
+            
+            if (negativeSignals > 3) {
+                aiScanScore -= 15;
+            } else if (negativeSignals > 1) {
+                aiScanScore -= 8;
+            } else if (negativeSignals > 0) {
+                aiScanScore -= 3;
+            }
+            
+            // Positive signals: good vendor reputation, security practices
+            const positiveKeywords = ['reputable', 'established', 'secure', 'compliance', 'certified', 'trusted'];
+            let positiveSignals = 0;
+            positiveKeywords.forEach(keyword => {
+                if (reputationLower.includes(keyword)) {
+                    positiveSignals++;
+                }
+            });
+            
+            if (positiveSignals > 2) {
+                aiScanScore += 10;
+            } else if (positiveSignals > 0) {
+                aiScanScore += 5;
+            }
+            
+            // Data quality and information availability
+            const dataQuality = data.data_quality || 'sufficient';
+            const citationsCount = citations.length;
+            if (dataQuality === 'sufficient' && citationsCount >= 5) {
+                aiScanScore += 5; // Good data quality helps confidence
+            } else if (dataQuality === 'insufficient' || citationsCount < 2) {
+                aiScanScore -= 5; // Limited data reduces confidence
+            }
+            
+            // Cap the score between 0 and 100
+            aiScanScore = Math.max(0, Math.min(100, aiScanScore));
+            
+            // Vendor Trust Score (0-100, based on trust score factors and vendor reputation)
+            // Use trust_score itself as a measure, or factors if available
+            let vendorTrustScore = data.trust_score?.score || 50;
+            // If we have factors, we could weight them, but for now use the overall score
+            
+            // Information Quantity Score (0-100, based on number of citations and data quality)
+            // Reuse citationsCount and dataQuality from above
+            let informationQuantityScore = 50;
+            // Base score on citations count (more citations = more information)
+            if (citationsCount === 0) {
+                informationQuantityScore = 0;
+            } else if (citationsCount <= 3) {
+                informationQuantityScore = 30 + (citationsCount * 10);
+            } else if (citationsCount <= 7) {
+                informationQuantityScore = 60 + ((citationsCount - 3) * 5);
+            } else {
+                informationQuantityScore = Math.min(100, 80 + ((citationsCount - 7) * 2));
+            }
+            
+            // Adjust based on data quality
+            if (dataQuality === 'insufficient') {
+                informationQuantityScore = Math.max(0, informationQuantityScore - 30);
+            } else if (dataQuality === 'limited') {
+                informationQuantityScore = Math.max(0, informationQuantityScore - 15);
+            }
+            
+            return {
+                virustotal: Math.round(virustotalScore),
+                cves: Math.round(cvesScore),
+                aiScan: Math.round(aiScanScore),
+                vendorTrust: Math.round(vendorTrustScore),
+                informationQuantity: Math.round(informationQuantityScore)
+            };
         }
         
         function displayComparison(data) {
