@@ -115,11 +115,15 @@ class AssessmentService:
         )
         print(f"[Assessment Service] ✓ Trust score: {trust_score.score}/100 ({trust_score.risk_level} risk, {trust_score.confidence:.1%} confidence)")
         
-        # Step 6: Suggest alternatives
+        # Step 6: Suggest alternatives (only if trust score is low)
         print(f"\n[Assessment Service] Step 6: Suggesting alternatives...")
         alternatives = await self.synthesizer.suggest_alternatives(
             category=category,
-            entity_name=entity_name
+            entity_name=entity_name,
+            vendor_name=vendor_name,
+            trust_score=trust_score,
+            security_posture=security_posture,
+            collected_data=collected_data
         )
         print(f"[Assessment Service] ✓ Found {len(alternatives)} alternatives")
         
