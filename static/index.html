@@ -652,11 +652,25 @@
         function calculateSpiderChartScores(data) {
             let virustotalScore = 50;
             const citations = data.security_posture?.citations || [];
+            const factors = data.trust_score?.factors || {};
             const vtCitation = citations.find(c => {
                 const claim = c.claim || '';
                 return (c.source_type === 'independent' || c.source && c.source.includes('virustotal')) && 
                        claim.toLowerCase().includes('virustotal');
             });
+            
+            // Trusted vendors list (same as backend)
+            const trustedVendors = [
+                'bitdefender', 'bitdefenderfalx', 'clamav', 'crowdstrike', 'crowstrike',
+                'kaspersky', 'microsoft', 'fortinet', 'google', 'withsecure',
+                'palo alto networks', 'paloalto', 'sentinel one', 'sentinelone'
+            ];
+            
+            let positives = 0;
+            let total = 0;
+            let trustedDetections = 0;
+            
+            // Extract positives/total from citation
             if (vtCitation && vtCitation.claim) {
                 const patterns = [
                     /(\d+)\/(\d+)\s+vendors?\s+flagged/i,
@@ -667,15 +681,79 @@
                 for (const pattern of patterns) {
                     const match = vtCitation.claim.match(pattern);
                     if (match) {
-                        const positives = parseInt(match[1]);
-                        const total = parseInt(match[2]);
-                        if (total > 0) {
-                            const ratio = positives / total;
-                            virustotalScore = Math.max(0, Math.min(100, (1 - ratio) * 100));
-                            break;
-                        }
+                        positives = parseInt(match[1]);
+                        total = parseInt(match[2]);
+                        break;
                     }
                 }
+            }
+            
+            // Check for trusted vendor detections in factors
+            for (const [key, value] of Object.entries(factors)) {
+                if (key.startsWith('virustotal_trusted_vendors_')) {
+                    // Extract number of trusted vendors from factor key
+                    const match = key.match(/virustotal_trusted_vendors_(\d+)/);
+                    if (match) {
+                        trustedDetections = parseInt(match[1]);
+                    }
+                }
+            }
+            
+            // Calculate score using new weighting logic
+            if (positives === 0 && total > 0) {
+                // Clean scan - high score
+                virustotalScore = 90;
+            } else if (positives > 0) {
+                // Calculate base penalty based on total positives (much more weight for many positives)
+                let basePenalty = 0;
+                if (positives >= 30) {
+                    basePenalty = 60;
+                } else if (positives >= 20) {
+                    basePenalty = 50;
+                } else if (positives >= 15) {
+                    basePenalty = 40;
+                } else if (positives >= 10) {
+                    basePenalty = 35;
+                } else if (positives >= 5) {
+                    basePenalty = 25;
+                } else {
+                    basePenalty = 15;
+                }
+                
+                // Trusted vendor detections are weighted much more heavily
+                const trustedPenalty = trustedDetections * 8;
+                
+                // Calculate untrusted detections (positives - trusted)
+                const untrustedDetections = positives - trustedDetections;
+                let untrustedPenalty = 0;
+                if (untrustedDetections >= 10) {
+                    untrustedPenalty = (untrustedDetections - 10) * 1;
+                } else if (untrustedDetections >= 5) {
+                    untrustedPenalty = (untrustedDetections - 5) * 0.5;
+                }
+                
+                // If we have trusted vendor detections, they override the base penalty logic
+                let totalPenalty = 0;
+                if (trustedDetections > 0) {
+                    totalPenalty = basePenalty + trustedPenalty + untrustedPenalty;
+                    // Additional multiplier if multiple trusted vendors agree
+                    if (trustedDetections >= 3) {
+                        totalPenalty = totalPenalty * 1.3;
+                    } else if (trustedDetections >= 2) {
+                        totalPenalty = totalPenalty * 1.15;
+                    }
+                } else {
+                    // No trusted detections - treat as potential false positives
+                    // Reduce penalty significantly if only untrusted detections
+                    if (untrustedDetections > 0 && trustedDetections === 0) {
+                        totalPenalty = basePenalty * 0.3 + untrustedPenalty;
+                    } else {
+                        totalPenalty = basePenalty + untrustedPenalty;
+                    }
+                }
+                
+                // Convert penalty to score (100 - penalty)
+                virustotalScore = Math.max(0, Math.min(100, 100 - totalPenalty));
             }
             
             let cvesScore = 50;
@@ -732,40 +810,48 @@
                 aiScanScore -= (cisaKevCount * 15);
             }
             
-            let aiVtCitation = vtCitation;
-            if (!aiVtCitation) {
-                aiVtCitation = citations.find(c => {
-                    const claim = c.claim || '';
-                    return (c.source_type === 'independent' || c.source && c.source.includes('virustotal')) && 
-                           claim.toLowerCase().includes('virustotal');
-                });
-            }
-            if (aiVtCitation && aiVtCitation.claim) {
-                const patterns = [
-                    /(\d+)\/(\d+)\s+vendors?\s+flagged/i,
-                    /(\d+)\s*\/\s*(\d+)/,
-                    /(\d+)\s+of\s+(\d+)/i
-                ];
-                for (const pattern of patterns) {
-                    const match = aiVtCitation.claim.match(pattern);
-                    if (match) {
-                        const positives = parseInt(match[1]);
-                        const total = parseInt(match[2]);
-                        if (total > 0) {
-                            const ratio = positives / total;
-                            if (ratio > 0.1) {
-                                aiScanScore -= 25;
-                            } else if (ratio > 0.05) {
-                                aiScanScore -= 15;
-                            } else if (ratio > 0) {
-                                aiScanScore -= 5;
-                            } else {
-                                aiScanScore += 5;
-                            }
-                            break;
-                        }
+            // Apply VirusTotal impact to AI Scan score using new weighting logic
+            // Reuse the same positives/total/trustedDetections from above
+            if (positives > 0) {
+                // Calculate penalty based on new weighting logic
+                let vtPenalty = 0;
+                
+                // Base penalty for many positives
+                if (positives >= 30) {
+                    vtPenalty = 30;
+                } else if (positives >= 20) {
+                    vtPenalty = 25;
+                } else if (positives >= 15) {
+                    vtPenalty = 20;
+                } else if (positives >= 10) {
+                    vtPenalty = 18;
+                } else if (positives >= 5) {
+                    vtPenalty = 12;
+                } else {
+                    vtPenalty = 8;
+                }
+                
+                // Trusted vendor detections add significant penalty
+                if (trustedDetections > 0) {
+                    vtPenalty += trustedDetections * 5; // 5 points per trusted vendor
+                    // Additional multiplier if multiple trusted vendors agree
+                    if (trustedDetections >= 3) {
+                        vtPenalty = vtPenalty * 1.2;
+                    } else if (trustedDetections >= 2) {
+                        vtPenalty = vtPenalty * 1.1;
+                    }
+                } else {
+                    // No trusted detections - reduce penalty (treat as potential false positives)
+                    const untrustedDetections = positives - trustedDetections;
+                    if (untrustedDetections > 0 && trustedDetections === 0) {
+                        vtPenalty = vtPenalty * 0.4; // 60% reduction for untrusted only
                     }
                 }
+                
+                aiScanScore -= Math.min(40, vtPenalty); // Cap at 40 points
+            } else if (positives === 0 && total > 0) {
+                // Clean scan - small positive boost
+                aiScanScore += 5;
             }
             
             let vendorReputation = data.security_posture?.vendor_reputation || '';
