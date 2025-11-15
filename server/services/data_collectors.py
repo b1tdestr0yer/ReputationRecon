@@ -5,7 +5,6 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
-import google.generativeai as genai
 import json
 
 # Load environment variables
@@ -808,38 +807,83 @@ class EntityResolver:
     """Resolve entity and vendor identity from input"""
     
     def __init__(self):
-        """Initialize EntityResolver with optional Gemini AI support"""
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                # Try gemini-2.5-flash first, fallback to gemini-2.5-pro
-                try:
-                    self.model = genai.GenerativeModel('gemini-2.5-flash')
-                    self.use_ai = True
-                    print("[Entity Resolver] ✓ Google Gemini configured for URL resolution (using gemini-2.5-flash)")
-                except Exception as e:
-                    print(f"[Entity Resolver] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
-                    try:
-                        self.model = genai.GenerativeModel('gemini-2.5-pro')
-                        self.use_ai = True
-                        print("[Entity Resolver] ✓ Google Gemini configured (using gemini-2.5-pro)")
-                    except Exception as e2:
-                        print(f"[Entity Resolver] ✗ Error initializing Gemini models: {e2}, using fallback")
-                        self.model = None
-                        self.use_ai = False
-            except Exception as e:
-                print(f"[Entity Resolver] ✗ Error configuring Gemini: {e}, using fallback")
-                self.model = None
-                self.use_ai = False
+        """Initialize EntityResolver with Vertex AI REST API support"""
+        self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.model_name = "gemini-2.5-flash-lite"  # Using flash-lite as shown in user's example
+        self.base_url = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+        
+        if self.api_key:
+            self.use_ai = True
+            print(f"[Entity Resolver] ✓ Vertex AI configured for URL resolution (using {self.model_name})")
         else:
-            self.model = None
             self.use_ai = False
+            print("[Entity Resolver] ✗ No API key found, using fallback resolution")
+    
+    async def _call_vertex_ai(self, prompt: str) -> Optional[str]:
+        """Call Vertex AI REST API and return the generated text.
+        
+        Uses the Vertex AI REST API endpoint as documented at:
+        https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference
+        """
+        if not self.use_ai or not self.api_key:
+            return None
+        
+        try:
+            # Use generateContent (non-streaming) endpoint
+            # Format: https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent
+            url = f"{self.base_url}/{self.model_name}:generateContent"
+            params = {"key": self.api_key}
+            
+            # Request payload format per Vertex AI documentation
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, params=params, json=payload)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # Extract text from Vertex AI response structure
+                # Response format: {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
+                if "candidates" in data and len(data["candidates"]) > 0:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        parts = candidate["content"]["parts"]
+                        if len(parts) > 0 and "text" in parts[0]:
+                            return parts[0]["text"]
+                
+                # Fallback: try to find text anywhere in the response
+                if "text" in str(data):
+                    text_match = re.search(r'"text":\s*"([^"]+)"', json.dumps(data))
+                    if text_match:
+                        return text_match.group(1)
+                
+                print(f"[Entity Resolver] ⚠ Unexpected response format: {json.dumps(data)[:200]}")
+                return None
+                
+        except httpx.HTTPStatusError as e:
+            error_text = e.response.text[:500] if hasattr(e.response, 'text') else str(e)
+            print(f"[Entity Resolver] ⚠ HTTP error calling Vertex AI: {e.response.status_code} - {error_text}")
+            return None
+        except Exception as e:
+            print(f"[Entity Resolver] ⚠ Error calling Vertex AI: {e}")
+            return None
     
     async def resolve_vendor_url_with_gemini(self, product_name: Optional[str], vendor_name: Optional[str]) -> Optional[str]:
-        """Use Gemini AI to resolve the vendor's official website URL"""
-        if not self.use_ai or not self.model:
-            print("[Entity Resolver] Gemini not available, skipping AI-based URL resolution")
+        """Use Vertex AI to resolve the vendor's official website URL"""
+        if not self.use_ai:
+            print("[Entity Resolver] Vertex AI not available, skipping AI-based URL resolution")
             return None
         
         if not vendor_name or vendor_name.lower() in ["unknown vendor", "unknown", ""]:
@@ -847,7 +891,7 @@ class EntityResolver:
             return None
         
         try:
-            print(f"[Entity Resolver] Using Gemini to resolve vendor URL for: {vendor_name} / {product_name}")
+            print(f"[Entity Resolver] Using Vertex AI to resolve vendor URL for: {vendor_name} / {product_name}")
             prompt = f"""Given the following vendor and product information, provide the official website URL for the vendor.
 
 Vendor Name: {vendor_name}
@@ -861,8 +905,12 @@ If you cannot determine the URL with high confidence, return:
 
 Respond with ONLY valid JSON, no additional text or explanation."""
 
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response_text = await self._call_vertex_ai(prompt)
+            if not response_text:
+                print("[Entity Resolver] ✗ Empty response from Vertex AI")
+                return None
+            
+            response_text = response_text.strip()
             
             # Try to extract JSON from response
             # Remove markdown code blocks if present
@@ -876,35 +924,35 @@ Respond with ONLY valid JSON, no additional text or explanation."""
                 result = json.loads(response_text)
                 resolved_url = result.get("url")
                 if resolved_url and resolved_url.startswith("http"):
-                    print(f"[Entity Resolver] ✓ Gemini resolved vendor URL: {resolved_url}")
+                    print(f"[Entity Resolver] ✓ Vertex AI resolved vendor URL: {resolved_url}")
                     return resolved_url
                 else:
-                    print(f"[Entity Resolver] ✗ Gemini returned invalid URL: {resolved_url}")
+                    print(f"[Entity Resolver] ✗ Vertex AI returned invalid URL: {resolved_url}")
                     return None
             except json.JSONDecodeError as e:
-                print(f"[Entity Resolver] ✗ Failed to parse Gemini JSON response: {e}")
+                print(f"[Entity Resolver] ✗ Failed to parse Vertex AI JSON response: {e}")
                 print(f"[Entity Resolver] Response was: {response_text[:200]}")
                 return None
                 
         except Exception as e:
-            print(f"[Entity Resolver] ✗ Error using Gemini for URL resolution: {e}")
+            print(f"[Entity Resolver] ✗ Error using Vertex AI for URL resolution: {e}")
             return None
     
     async def resolve(self, product_name: Optional[str] = None,
                      vendor_name: Optional[str] = None,
                      url: Optional[str] = None) -> Dict[str, str]:
-        """Resolve entity and vendor names, and optionally resolve vendor URL using Gemini"""
+        """Resolve entity and vendor names, and optionally resolve vendor URL using Vertex AI"""
         print(f"[Entity Resolver] Resolving entity - product: {product_name}, vendor: {vendor_name}, url: {url}")
         resolved_entity = product_name or ""
         resolved_vendor = vendor_name or ""
         resolved_url = url or ""
         
-        # If no URL provided, try to resolve it using Gemini
+        # If no URL provided, try to resolve it using Vertex AI
         if not resolved_url and resolved_vendor and resolved_vendor.lower() not in ["unknown vendor", "unknown", ""]:
-            print(f"[Entity Resolver] No URL provided, attempting to resolve using Gemini...")
-            gemini_url = await self.resolve_vendor_url_with_gemini(resolved_entity, resolved_vendor)
-            if gemini_url:
-                resolved_url = gemini_url
+            print(f"[Entity Resolver] No URL provided, attempting to resolve using Vertex AI...")
+            ai_url = await self.resolve_vendor_url_with_gemini(resolved_entity, resolved_vendor)
+            if ai_url:
+                resolved_url = ai_url
         
         # If URL provided, try to extract vendor/product info
         if resolved_url:
