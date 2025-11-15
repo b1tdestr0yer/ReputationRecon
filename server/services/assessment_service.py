@@ -49,7 +49,7 @@ class AssessmentService:
         else:
             print("[Assessment Service] No cache entry found")
         
-        # Step 1: Resolve entity and vendor
+        # Step 1: Resolve entity and vendor (including URL via Gemini if not provided)
         print("\n[Assessment Service] Step 1: Resolving entity and vendor...")
         resolved = await self.entity_resolver.resolve(
             product_name=request.product_name,
@@ -59,7 +59,12 @@ class AssessmentService:
         
         entity_name = resolved["entity_name"]
         vendor_name = resolved["vendor_name"]
-        resolved_url = resolved["resolved_url"]
+        resolved_url = resolved["resolved_url"]  # This may be Gemini-resolved if not provided
+        print(f"[Assessment Service] ✓ Resolved: {entity_name} by {vendor_name}")
+        if resolved_url:
+            print(f"  → URL: {resolved_url}")
+        else:
+            print(f"  → No URL available (neither provided nor resolved)")
         
         # Step 2: Classify software
         print(f"\n[Assessment Service] Step 2: Classifying software...")
@@ -182,17 +187,11 @@ class AssessmentService:
         print(f"  → Queueing CISA KEV lookup...")
         tasks.append(self.cve_collector.get_cisa_kev(entity_name))
         
-        # Vendor pages - try to find even without explicit URL
+        # Vendor pages - use resolved URL (which may have been resolved by Gemini)
         async def noop():
             return None
         
-        vendor_url = url
-        if not vendor_url and vendor_name and vendor_name.lower() not in ["unknown vendor", "unknown"]:
-            # Try to construct a URL from vendor name
-            vendor_domain = vendor_name.lower().replace(" ", "").replace(".", "")
-            vendor_url = f"https://{vendor_domain}.com"
-            print(f"  → Attempting to find vendor pages using constructed URL: {vendor_url}")
-        
+        vendor_url = url  # This is the resolved_url from EntityResolver, which may be Gemini-resolved
         if vendor_url:
             print(f"  → Queueing vendor page fetch...")
             tasks.append(self.vendor_collector.fetch_security_page(vendor_url))
