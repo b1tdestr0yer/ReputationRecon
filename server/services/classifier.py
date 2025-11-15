@@ -3,6 +3,7 @@ from server.dtos.AssessmentResponse import SoftwareCategory
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+from server.utils.sanitize import remove_double_stars
 
 load_dotenv()
 
@@ -225,7 +226,7 @@ Description: {description or "none"}
 URL: {url or "none"}
 """
                 resp = self.model.generate_content(prompt)
-                out = resp.text.strip().lower()
+                out = remove_double_stars(resp.text.strip().lower())
                 for alias, cat in self.category_aliases.items():
                     if alias in out:
                         return cat

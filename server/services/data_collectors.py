@@ -7,6 +7,8 @@ import asyncio
 from dotenv import load_dotenv
 import json
 
+from server.utils.sanitize import remove_double_stars
+
 # Load environment variables
 load_dotenv()
 
@@ -216,7 +218,7 @@ class CVECollector(DataCollector):
             results["version_specific_cves"] = len(version_specific_cves)
             results["version_specific_recent"] = sorted(version_specific_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
             
-            # Debug: verify counts are consistent
+            # verify counts are consistent
             if results["critical_count"] > results["total_cves"] or results["high_count"] > results["total_cves"]:
                 print(f"[CVE Collector] ⚠ WARNING: Count mismatch detected! Total: {results['total_cves']}, Critical: {results['critical_count']}, High: {results['high_count']}")
                 print(f"[CVE Collector] Debug - Unique CVE IDs: {[c.get('id') for c in unique_cves]}")
@@ -331,7 +333,7 @@ If you cannot find a clear version number, return:
 Respond with ONLY valid JSON, no additional text or explanation."""
 
             response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response_text = remove_double_stars(response.text.strip())
             
             # Try to extract JSON from response
             # Remove markdown code blocks if present
