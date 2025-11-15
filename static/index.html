@@ -314,15 +314,9 @@
                 </div>
             </div>
             
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="url">URL (optional)</label>
-                    <input type="url" id="url" placeholder="https://example.com">
-                </div>
-                <div class="form-group">
-                    <label for="hash">Hash (optional)</label>
-                    <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256">
-                </div>
+            <div class="form-group">
+                <label for="hash">Hash (optional)</label>
+                <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256">
             </div>
             
             <button onclick="assessApplication()">Assess Application</button>
@@ -397,11 +391,10 @@
         async function assessApplication() {
             const product = document.getElementById('product').value;
             const vendor = document.getElementById('vendor').value;
-            const url = document.getElementById('url').value;
             const hash = document.getElementById('hash').value;
             
-            if (!product && !vendor && !url) {
-                alert('Please provide at least one of: product name, vendor name, or URL');
+            if (!product && !vendor) {
+                alert('Please provide at least one of: product name or vendor name');
                 return;
             }
             
@@ -417,7 +410,7 @@
                     body: JSON.stringify({
                         product_name: product || null,
                         vendor_name: vendor || null,
-                        url: url || null,
+                        url: null,
                         hash: hash || null
                     })
                 });
@@ -486,9 +479,13 @@
             const riskLevel = data.trust_score.risk_level || 'Unknown';
             const scoreClass = trustScore >= 70 ? 'high' : trustScore >= 50 ? 'medium' : 'low';
             
+            // Get version information
+            const detectedVersion = data.security_posture?.cve_summary?.detected_version;
+            const versionInfo = detectedVersion ? ` | <strong>Version:</strong> ${detectedVersion}` : '';
+            
             let html = `
                 <h2>Assessment Results: ${data.entity_name}</h2>
-                <p><strong>Vendor:</strong> ${data.vendor_name} | <strong>Category:</strong> ${data.category}</p>
+                <p><strong>Vendor:</strong> ${data.vendor_name} | <strong>Category:</strong> ${data.category}${versionInfo}</p>
                 
                 <div class="trust-score ${scoreClass}">
                     <div class="score-value">${trustScore}/100</div>
@@ -508,12 +505,14 @@
                 <div class="section">
                     <h3>CVE Analysis</h3>
                     ${data.security_posture.cve_summary.detected_version ? `
-                        <p><strong>Detected Version:</strong> ${data.security_posture.cve_summary.detected_version}</p>
-                        <p><strong>Version-Specific CVEs:</strong> ${data.security_posture.cve_summary.version_specific_cves || 0} 
-                           (Critical: ${data.security_posture.cve_summary.version_specific_critical || 0}, 
-                           High: ${data.security_posture.cve_summary.version_specific_high || 0})</p>
+                        <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>Detected Version:</strong> ${data.security_posture.cve_summary.detected_version}</p>
+                            <p style="margin: 5px 0;"><strong>Version-Specific CVEs:</strong> ${data.security_posture.cve_summary.version_specific_cves || 0} 
+                               (Critical: ${data.security_posture.cve_summary.version_specific_critical || 0}, 
+                               High: ${data.security_posture.cve_summary.version_specific_high || 0})</p>
+                        </div>
                         <hr style="margin: 15px 0;">
-                    ` : ''}
+                    ` : '<p style="color: #666; font-style: italic;">No version information detected. Version-specific CVE analysis unavailable.</p>'}
                     <p><strong>Total CVEs (All Versions):</strong> ${data.security_posture.cve_summary.total_cves}</p>
                     <p><strong>Critical:</strong> ${data.security_posture.cve_summary.critical_count} | <strong>High:</strong> ${data.security_posture.cve_summary.high_count}</p>
                     <p><strong>CISA KEV Entries:</strong> ${data.security_posture.cve_summary.cisa_kev_count}</p>
@@ -596,14 +595,16 @@
         
         function displayComparison(data) {
             const resultsDiv = document.getElementById('results');
-            let html = '<h2>Comparison Results</h2><table class="comparison-table"><thead><tr><th>Application</th><th>Vendor</th><th>Trust Score</th><th>Risk Level</th><th>CVEs</th><th>CISA KEV</th></tr></thead><tbody>';
+            let html = '<h2>Comparison Results</h2><table class="comparison-table"><thead><tr><th>Application</th><th>Vendor</th><th>Version</th><th>Trust Score</th><th>Risk Level</th><th>CVEs</th><th>CISA KEV</th></tr></thead><tbody>';
             
             data.assessments.forEach(assessment => {
                 const score = (assessment.trust_score && assessment.trust_score.score) || 0;
                 const riskLevel = (assessment.trust_score && assessment.trust_score.risk_level) || 'Unknown';
+                const version = (assessment.security_posture && assessment.security_posture.cve_summary && assessment.security_posture.cve_summary.detected_version) || 'N/A';
                 html += `<tr>
                     <td>${assessment.entity_name || 'N/A'}</td>
                     <td>${assessment.vendor_name || 'N/A'}</td>
+                    <td>${version}</td>
                     <td>${score}/100</td>
                     <td>${riskLevel}</td>
                     <td>${(assessment.security_posture && assessment.security_posture.cve_summary && assessment.security_posture.cve_summary.total_cves) || 0}</td>
