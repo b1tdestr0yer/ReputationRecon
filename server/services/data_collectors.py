@@ -55,6 +55,7 @@ class CVECollector(DataCollector):
             # Search by keyword (product name or vendor)
             search_terms = [product_name, vendor_name]
             all_cves = []
+            seen_cve_ids = set()  # Track CVE IDs to avoid duplicates (normalized, case-insensitive)
             
             for term in search_terms:
                 if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
@@ -75,7 +76,16 @@ class CVECollector(DataCollector):
                     print(f"[CVE Collector] Found {len(data['vulnerabilities'])} vulnerabilities for term: {term}")
                     for vuln in data["vulnerabilities"]:
                         cve_item = vuln.get("cve", {})
-                        cve_id = cve_item.get("id", "")
+                        cve_id = cve_item.get("id", "").strip().upper()  # Normalize CVE ID
+                        
+                        if not cve_id:
+                            continue
+                        
+                        # Skip if we've already seen this CVE
+                        if cve_id in seen_cve_ids:
+                            print(f"[CVE Collector] Skipping duplicate CVE: {cve_id}")
+                            continue
+                        seen_cve_ids.add(cve_id)
                         
                         # Get CVSS score
                         metrics = cve_item.get("metrics", {})
@@ -92,10 +102,8 @@ class CVECollector(DataCollector):
                         severity = "unknown"
                         if base_score >= 9.0:
                             severity = "critical"
-                            results["critical_count"] += 1
                         elif base_score >= 7.0:
                             severity = "high"
-                            results["high_count"] += 1
                         
                         all_cves.append({
                             "id": cve_id,
@@ -106,6 +114,7 @@ class CVECollector(DataCollector):
                         })
             
             # If version provided, search for version-specific CVEs
+            version_specific_cve_ids = set()  # Track version-specific CVE IDs
             if product_version:
                 print(f"[CVE Collector] Searching for version-specific CVEs: {product_version}")
                 version_search_terms = [
@@ -128,7 +137,13 @@ class CVECollector(DataCollector):
                     if version_data and "vulnerabilities" in version_data:
                         for vuln in version_data["vulnerabilities"]:
                             cve_item = vuln.get("cve", {})
-                            cve_id = cve_item.get("id", "")
+                            cve_id = cve_item.get("id", "").strip().upper()  # Normalize CVE ID
+                            
+                            if not cve_id:
+                                continue
+                            
+                            # Mark as version-specific
+                            version_specific_cve_ids.add(cve_id)
                             
                             # Get CVSS score
                             metrics = cve_item.get("metrics", {})
@@ -145,50 +160,66 @@ class CVECollector(DataCollector):
                             severity = "unknown"
                             if base_score >= 9.0:
                                 severity = "critical"
-                                results["version_specific_critical"] += 1
                             elif base_score >= 7.0:
                                 severity = "high"
-                                results["version_specific_high"] += 1
                             
-                            # Add to version-specific list
-                            version_cve = {
-                                "id": cve_id,
-                                "description": cve_item.get("descriptions", [{}])[0].get("value", ""),
-                                "base_score": base_score,
-                                "severity": severity,
-                                "published": cve_item.get("published", "")
-                            }
-                            
-                            # Check if already in all_cves (avoid double counting in totals)
-                            if not any(c["id"] == cve_id for c in all_cves):
-                                all_cves.append(version_cve)
-                                if severity == "critical":
-                                    results["critical_count"] += 1
-                                elif severity == "high":
-                                    results["high_count"] += 1
+                            # Add to all_cves if not already present
+                            if cve_id not in seen_cve_ids:
+                                seen_cve_ids.add(cve_id)
+                                all_cves.append({
+                                    "id": cve_id,
+                                    "description": cve_item.get("descriptions", [{}])[0].get("value", ""),
+                                    "base_score": base_score,
+                                    "severity": severity,
+                                    "published": cve_item.get("published", "")
+                                })
+                            else:
+                                print(f"[CVE Collector] Version-specific CVE {cve_id} already in main list")
             
-            # Remove duplicates
-            seen = set()
-            unique_cves = []
+            # Final deduplication pass (in case of any edge cases)
+            # Create a dict keyed by CVE ID to ensure uniqueness
+            cve_dict = {}
+            for cve in all_cves:
+                cve_id = cve.get("id", "").strip().upper()
+                if cve_id and cve_id not in cve_dict:
+                    cve_dict[cve_id] = cve
+            
+            unique_cves = list(cve_dict.values())
             version_specific_cves = []
             
-            for cve in all_cves:
-                if cve["id"] not in seen:
-                    seen.add(cve["id"])
-                    unique_cves.append(cve)
-                    
-                    # Check if this CVE is version-specific (appears in version search results)
-                    if product_version:
-                        cve_desc = cve.get("description", "").lower()
-                        version_lower = product_version.lower()
-                        # Check if version appears in description
-                        if version_lower in cve_desc:
-                            version_specific_cves.append(cve)
+            # Reset counts and count from unique CVEs only
+            results["critical_count"] = 0
+            results["high_count"] = 0
+            results["version_specific_critical"] = 0
+            results["version_specific_high"] = 0
+            
+            for cve in unique_cves:
+                cve_id = cve.get("id", "").strip().upper()
+                severity = cve.get("severity", "unknown")
+                
+                # Count critical and high
+                if severity == "critical":
+                    results["critical_count"] += 1
+                elif severity == "high":
+                    results["high_count"] += 1
+                
+                # Check if this CVE is version-specific
+                if cve_id in version_specific_cve_ids:
+                    version_specific_cves.append(cve)
+                    if severity == "critical":
+                        results["version_specific_critical"] += 1
+                    elif severity == "high":
+                        results["version_specific_high"] += 1
             
             results["total_cves"] = len(unique_cves)
             results["recent_cves"] = sorted(unique_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
             results["version_specific_cves"] = len(version_specific_cves)
             results["version_specific_recent"] = sorted(version_specific_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
+            
+            # Debug: verify counts are consistent
+            if results["critical_count"] > results["total_cves"] or results["high_count"] > results["total_cves"]:
+                print(f"[CVE Collector] ⚠ WARNING: Count mismatch detected! Total: {results['total_cves']}, Critical: {results['critical_count']}, High: {results['high_count']}")
+                print(f"[CVE Collector] Debug - Unique CVE IDs: {[c.get('id') for c in unique_cves]}")
             
             print(f"[CVE Collector] CVE search complete: {results['total_cves']} total CVEs ({results['version_specific_cves']} version-specific), {results['critical_count']} critical ({results['version_specific_critical']} version-specific), {results['high_count']} high ({results['version_specific_high']} version-specific)")
             
