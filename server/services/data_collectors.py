@@ -55,6 +55,7 @@ class CVECollector(DataCollector):
             # Search by keyword (product name or vendor)
             search_terms = [product_name, vendor_name]
             all_cves = []
+            seen_cve_ids = set()  # Track CVE IDs to avoid duplicates (normalized, case-insensitive)
             
             for term in search_terms:
                 if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
@@ -75,7 +76,16 @@ class CVECollector(DataCollector):
                     print(f"[CVE Collector] Found {len(data['vulnerabilities'])} vulnerabilities for term: {term}")
                     for vuln in data["vulnerabilities"]:
                         cve_item = vuln.get("cve", {})
-                        cve_id = cve_item.get("id", "")
+                        cve_id = cve_item.get("id", "").strip().upper()  # Normalize CVE ID
+                        
+                        if not cve_id:
+                            continue
+                        
+                        # Skip if we've already seen this CVE
+                        if cve_id in seen_cve_ids:
+                            print(f"[CVE Collector] Skipping duplicate CVE: {cve_id}")
+                            continue
+                        seen_cve_ids.add(cve_id)
                         
                         # Get CVSS score
                         metrics = cve_item.get("metrics", {})
@@ -92,10 +102,8 @@ class CVECollector(DataCollector):
                         severity = "unknown"
                         if base_score >= 9.0:
                             severity = "critical"
-                            results["critical_count"] += 1
                         elif base_score >= 7.0:
                             severity = "high"
-                            results["high_count"] += 1
                         
                         all_cves.append({
                             "id": cve_id,
@@ -106,6 +114,7 @@ class CVECollector(DataCollector):
                         })
             
             # If version provided, search for version-specific CVEs
+            version_specific_cve_ids = set()  # Track version-specific CVE IDs
             if product_version:
                 print(f"[CVE Collector] Searching for version-specific CVEs: {product_version}")
                 version_search_terms = [
@@ -128,7 +137,13 @@ class CVECollector(DataCollector):
                     if version_data and "vulnerabilities" in version_data:
                         for vuln in version_data["vulnerabilities"]:
                             cve_item = vuln.get("cve", {})
-                            cve_id = cve_item.get("id", "")
+                            cve_id = cve_item.get("id", "").strip().upper()  # Normalize CVE ID
+                            
+                            if not cve_id:
+                                continue
+                            
+                            # Mark as version-specific
+                            version_specific_cve_ids.add(cve_id)
                             
                             # Get CVSS score
                             metrics = cve_item.get("metrics", {})
@@ -145,50 +160,66 @@ class CVECollector(DataCollector):
                             severity = "unknown"
                             if base_score >= 9.0:
                                 severity = "critical"
-                                results["version_specific_critical"] += 1
                             elif base_score >= 7.0:
                                 severity = "high"
-                                results["version_specific_high"] += 1
                             
-                            # Add to version-specific list
-                            version_cve = {
-                                "id": cve_id,
-                                "description": cve_item.get("descriptions", [{}])[0].get("value", ""),
-                                "base_score": base_score,
-                                "severity": severity,
-                                "published": cve_item.get("published", "")
-                            }
-                            
-                            # Check if already in all_cves (avoid double counting in totals)
-                            if not any(c["id"] == cve_id for c in all_cves):
-                                all_cves.append(version_cve)
-                                if severity == "critical":
-                                    results["critical_count"] += 1
-                                elif severity == "high":
-                                    results["high_count"] += 1
+                            # Add to all_cves if not already present
+                            if cve_id not in seen_cve_ids:
+                                seen_cve_ids.add(cve_id)
+                                all_cves.append({
+                                    "id": cve_id,
+                                    "description": cve_item.get("descriptions", [{}])[0].get("value", ""),
+                                    "base_score": base_score,
+                                    "severity": severity,
+                                    "published": cve_item.get("published", "")
+                                })
+                            else:
+                                print(f"[CVE Collector] Version-specific CVE {cve_id} already in main list")
             
-            # Remove duplicates
-            seen = set()
-            unique_cves = []
+            # Final deduplication pass (in case of any edge cases)
+            # Create a dict keyed by CVE ID to ensure uniqueness
+            cve_dict = {}
+            for cve in all_cves:
+                cve_id = cve.get("id", "").strip().upper()
+                if cve_id and cve_id not in cve_dict:
+                    cve_dict[cve_id] = cve
+            
+            unique_cves = list(cve_dict.values())
             version_specific_cves = []
             
-            for cve in all_cves:
-                if cve["id"] not in seen:
-                    seen.add(cve["id"])
-                    unique_cves.append(cve)
-                    
-                    # Check if this CVE is version-specific (appears in version search results)
-                    if product_version:
-                        cve_desc = cve.get("description", "").lower()
-                        version_lower = product_version.lower()
-                        # Check if version appears in description
-                        if version_lower in cve_desc:
-                            version_specific_cves.append(cve)
+            # Reset counts and count from unique CVEs only
+            results["critical_count"] = 0
+            results["high_count"] = 0
+            results["version_specific_critical"] = 0
+            results["version_specific_high"] = 0
+            
+            for cve in unique_cves:
+                cve_id = cve.get("id", "").strip().upper()
+                severity = cve.get("severity", "unknown")
+                
+                # Count critical and high
+                if severity == "critical":
+                    results["critical_count"] += 1
+                elif severity == "high":
+                    results["high_count"] += 1
+                
+                # Check if this CVE is version-specific
+                if cve_id in version_specific_cve_ids:
+                    version_specific_cves.append(cve)
+                    if severity == "critical":
+                        results["version_specific_critical"] += 1
+                    elif severity == "high":
+                        results["version_specific_high"] += 1
             
             results["total_cves"] = len(unique_cves)
             results["recent_cves"] = sorted(unique_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
             results["version_specific_cves"] = len(version_specific_cves)
             results["version_specific_recent"] = sorted(version_specific_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
+            
+            # Debug: verify counts are consistent
+            if results["critical_count"] > results["total_cves"] or results["high_count"] > results["total_cves"]:
+                print(f"[CVE Collector] ⚠ WARNING: Count mismatch detected! Total: {results['total_cves']}, Critical: {results['critical_count']}, High: {results['high_count']}")
+                print(f"[CVE Collector] Debug - Unique CVE IDs: {[c.get('id') for c in unique_cves]}")
             
             print(f"[CVE Collector] CVE search complete: {results['total_cves']} total CVEs ({results['version_specific_cves']} version-specific), {results['critical_count']} critical ({results['version_specific_critical']} version-specific), {results['high_count']} high ({results['version_specific_high']} version-specific)")
             
@@ -1015,6 +1046,152 @@ class WebSearchCollector(DataCollector):
         """Search for security advisories"""
         # Would integrate with CERT databases, vendor advisories, etc.
         return []
+
+
+class BugBountyCollector(DataCollector):
+    """Collect public bug bounty reports from HackerOne and Bugcrowd"""
+    
+    async def search_hackerone(self, product_name: str, vendor_name: str) -> List[Dict]:
+        """Search HackerOne public hacktivity for bug reports"""
+        print(f"[Bug Bounty Collector] Searching HackerOne for: {product_name}, {vendor_name}")
+        reports = []
+        
+        try:
+            # HackerOne public hacktivity API endpoint
+            # Search terms: product name and vendor name
+            search_terms = [product_name, vendor_name]
+            
+            for term in search_terms:
+                if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
+                    continue
+                
+                # HackerOne hacktivity search (public endpoint)
+                # Note: This is a simplified search - in production you might need API key for more results
+                url = "https://hackerone.com/hacktivity"
+                params = {
+                    "querystring": term,
+                    "type": "public"
+                }
+                
+                # Use web search approach since HackerOne doesn't have a simple public API
+                # We'll search for public reports via their hacktivity page
+                search_url = f"https://hackerone.com/hacktivity?querystring={term.replace(' ', '+')}"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
+                        response = await client.get(search_url)
+                        if response.status_code == 200:
+                            content = response.text
+                            
+                            # Parse HTML to extract report information
+                            # Look for report links and titles
+                            # Find report links (simplified pattern)
+                            report_pattern = r'href="(/reports/[^"]+)"'
+                            title_pattern = r'<a[^>]*href="/reports/[^"]+"[^>]*>([^<]+)</a>'
+                            
+                            report_links = re.findall(report_pattern, content)
+                            titles = re.findall(title_pattern, content)
+                            
+                            for i, link in enumerate(report_links[:10]):  # Limit to 10 reports
+                                report_url = f"https://hackerone.com{link}"
+                                title = titles[i] if i < len(titles) else "Bug Report"
+                                
+                                reports.append({
+                                    "platform": "HackerOne",
+                                    "title": title,
+                                    "url": report_url,
+                                    "product": term
+                                })
+                            
+                            if report_links:
+                                print(f"[Bug Bounty Collector] Found {len(report_links)} HackerOne reports for: {term}")
+                except Exception as e:
+                    print(f"[Bug Bounty Collector] Error searching HackerOne for {term}: {e}")
+        
+        except Exception as e:
+            print(f"[Bug Bounty Collector] Error in HackerOne search: {e}")
+        
+        return reports
+    
+    async def search_bugcrowd(self, product_name: str, vendor_name: str) -> List[Dict]:
+        """Search Bugcrowd public vulnerability disclosures"""
+        print(f"[Bug Bounty Collector] Searching Bugcrowd for: {product_name}, {vendor_name}")
+        reports = []
+        
+        try:
+            search_terms = [product_name, vendor_name]
+            
+            for term in search_terms:
+                if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
+                    continue
+                
+                # Bugcrowd public vulnerability disclosure search
+                search_url = f"https://bugcrowd.com/disclosures?q={term.replace(' ', '+')}"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
+                        response = await client.get(search_url)
+                        if response.status_code == 200:
+                            content = response.text
+                            
+                            # Parse HTML to extract disclosure information
+                            # Find disclosure links
+                            disclosure_pattern = r'href="(/[^"]+/disclosure/[^"]+)"'
+                            title_pattern = r'<a[^>]*href="/[^"]+/disclosure/[^"]+"[^>]*>([^<]+)</a>'
+                            
+                            disclosure_links = re.findall(disclosure_pattern, content)
+                            titles = re.findall(title_pattern, content)
+                            
+                            for i, link in enumerate(disclosure_links[:10]):  # Limit to 10 reports
+                                report_url = f"https://bugcrowd.com{link}"
+                                title = titles[i] if i < len(titles) else "Vulnerability Disclosure"
+                                
+                                reports.append({
+                                    "platform": "Bugcrowd",
+                                    "title": title,
+                                    "url": report_url,
+                                    "product": term
+                                })
+                            
+                            if disclosure_links:
+                                print(f"[Bug Bounty Collector] Found {len(disclosure_links)} Bugcrowd reports for: {term}")
+                except Exception as e:
+                    print(f"[Bug Bounty Collector] Error searching Bugcrowd for {term}: {e}")
+        
+        except Exception as e:
+            print(f"[Bug Bounty Collector] Error in Bugcrowd search: {e}")
+        
+        return reports
+    
+    async def search_bug_bounties(self, product_name: str, vendor_name: str) -> Dict[str, Any]:
+        """Search both HackerOne and Bugcrowd for public bug bounty reports"""
+        print(f"[Bug Bounty Collector] Searching bug bounty platforms for: {product_name} ({vendor_name})")
+        
+        # Search both platforms in parallel
+        hackerone_reports = await self.search_hackerone(product_name, vendor_name)
+        bugcrowd_reports = await self.search_bugcrowd(product_name, vendor_name)
+        
+        all_reports = hackerone_reports + bugcrowd_reports
+        
+        # Remove duplicates based on URL
+        seen_urls = set()
+        unique_reports = []
+        for report in all_reports:
+            url = report.get("url", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_reports.append(report)
+        
+        result = {
+            "total_reports": len(unique_reports),
+            "hackerone_count": len(hackerone_reports),
+            "bugcrowd_count": len(bugcrowd_reports),
+            "reports": unique_reports
+        }
+        
+        print(f"[Bug Bounty Collector] ✓ Found {len(unique_reports)} total bug bounty reports ({len(hackerone_reports)} HackerOne, {len(bugcrowd_reports)} Bugcrowd)")
+        
+        return result
 
 
 class EntityResolver:

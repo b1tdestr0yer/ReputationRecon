@@ -227,6 +227,25 @@ class ExportService:
         else:
             md += "No detailed factors available.\n"
         
+        md += "\n---\n\n## Bug Bounty Reports\n\n"
+        
+        # Extract bug bounty citations
+        bug_bounty_citations = [c for c in citations if c.get('source_type') in ['HackerOne', 'Bugcrowd']]
+        if bug_bounty_citations:
+            h1_count = len([c for c in bug_bounty_citations if c.get('source_type') == 'HackerOne'])
+            bc_count = len([c for c in bug_bounty_citations if c.get('source_type') == 'Bugcrowd'])
+            
+            md += f"**Total Reports:** {len(bug_bounty_citations)}\n"
+            md += f"**HackerOne:** {h1_count}\n"
+            md += f"**Bugcrowd:** {bc_count}\n\n"
+            
+            md += "### Public Bug Bounty Reports\n\n"
+            for i, citation in enumerate(bug_bounty_citations, 1):
+                md += f"{i}. **{citation.get('source_type', 'Bug Bounty')}**: [{citation.get('source', 'N/A')}]({citation.get('source', '#')})\n"
+                md += f"   - *{citation.get('claim', 'N/A')}*\n\n"
+        else:
+            md += "No public bug bounty reports found.\n"
+        
         md += "\n---\n\n## Sources & Citations\n\n"
         
         if citations:
@@ -501,6 +520,25 @@ class ExportService:
                 html += f"<h3>{i}. {alt.get('name', 'Unknown')} ({alt.get('vendor', 'Unknown')})</h3>"
                 html += f"<p><strong>Trust Score:</strong> {alt.get('trust_score', 'N/A')}/100</p>"
                 html += f"<p>{alt.get('rationale', 'N/A')}</p>"
+        
+        # Add Bug Bounty Reports section
+        html += "<h2>Bug Bounty Reports</h2>"
+        bug_bounty_citations = [c for c in citations if c.get('source_type') in ['HackerOne', 'Bugcrowd']]
+        if bug_bounty_citations:
+            h1_count = len([c for c in bug_bounty_citations if c.get('source_type') == 'HackerOne'])
+            bc_count = len([c for c in bug_bounty_citations if c.get('source_type') == 'Bugcrowd'])
+            
+            html += f"<p><strong>Total Reports:</strong> {len(bug_bounty_citations)}<br>"
+            html += f"<strong>HackerOne:</strong> {h1_count}<br>"
+            html += f"<strong>Bugcrowd:</strong> {bc_count}</p>"
+            
+            html += "<h3>Public Bug Bounty Reports</h3><ul>"
+            for i, citation in enumerate(bug_bounty_citations, 1):
+                html += f'<li><strong>{citation.get("source_type", "Bug Bounty")}:</strong> <a href="{citation.get("source", "#")}">{citation.get("source", "N/A")}</a><br>'
+                html += f'<em>{citation.get("claim", "N/A")}</em></li>'
+            html += "</ul>"
+        else:
+            html += "<p>No public bug bounty reports found.</p>"
         
         if citations:
             html += "<h2>Sources & Citations</h2>"

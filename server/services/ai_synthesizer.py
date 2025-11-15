@@ -466,6 +466,7 @@ Write the vendor reputation summary:"""
         incidents = data.get("incidents") or []
         kev = data.get("cisa_kev") or []
         cves = data.get("cves") or {}
+        bug_bounties = data.get("bug_bounties") or {}
 
         context = []
         if kev:
@@ -474,6 +475,11 @@ Write the vendor reputation summary:"""
             context.append(f"{len(incidents)} public incidents")
         if cves and cves.get("critical_count", 0):
             context.append(f"{cves.get('critical_count')} critical CVEs")
+        if bug_bounties and bug_bounties.get("total_reports", 0) > 0:
+            total = bug_bounties.get("total_reports", 0)
+            h1_count = bug_bounties.get("hackerone_count", 0)
+            bc_count = bug_bounties.get("bugcrowd_count", 0)
+            context.append(f"{total} public bug bounty reports ({h1_count} HackerOne, {bc_count} Bugcrowd)")
 
         if self.use_ai and context:
             try:
@@ -486,6 +492,7 @@ Data:
 Rules:
 - If findings are severe, state it clearly.
 - If limited, say visibility is limited.
+- Mention bug bounty reports if available as they indicate active security research.
 """
                 result = await self._call_vertex_ai(prompt)
                 if result:
@@ -493,6 +500,9 @@ Rules:
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating incidents summary: {e}")
 
+        if bug_bounties and bug_bounties.get("total_reports", 0) > 0:
+            total = bug_bounties.get("total_reports", 0)
+            return f"{total} public bug bounty reports found, indicating active security research and potential vulnerabilities."
         if incidents:
             return f"{len(incidents)} documented security incidents."
         if kev:
@@ -748,6 +758,44 @@ Vendor text:
                 timestamp=datetime.now()
             ))
 
+        # Add bug bounty citations
+        bug_bounties = data.get("bug_bounties") or {}
+        if bug_bounties and bug_bounties.get("reports"):
+            reports = bug_bounties.get("reports", [])
+            for report in reports[:5]:  # Limit to 5 citations
+                platform = report.get("platform", "Bug Bounty")
+                title = report.get("title", "Bug Report")
+                url = report.get("url", "")
+                if url:
+                    cites.append(Citation(
+                        source=url,
+                        source_type=platform,
+                        claim=f"Public bug bounty report: {title}",
+                        is_vendor_stated=False,
+                        timestamp=datetime.now()
+                    ))
+            # Add summary citation if there are more reports
+            total = bug_bounties.get("total_reports", 0)
+            if total > 5:
+                h1_count = bug_bounties.get("hackerone_count", 0)
+                bc_count = bug_bounties.get("bugcrowd_count", 0)
+                if h1_count > 0:
+                    cites.append(Citation(
+                        source="https://hackerone.com/hacktivity",
+                        source_type="HackerOne",
+                        claim=f"{h1_count} additional HackerOne reports found",
+                        is_vendor_stated=False,
+                        timestamp=datetime.now()
+                    ))
+                if bc_count > 0:
+                    cites.append(Citation(
+                        source="https://bugcrowd.com/disclosures",
+                        source_type="Bugcrowd",
+                        claim=f"{bc_count} additional Bugcrowd reports found",
+                        is_vendor_stated=False,
+                        timestamp=datetime.now()
+                    ))
+
         return cites
 
     async def _generate_security_posture_summary(
@@ -771,6 +819,10 @@ Vendor text:
             return f"{entity_name} by {vendor_name} ({category.value}) has {cve_info}{kev_info}. {vendor_reputation[:100]}..."
         
         try:
+            # Get bug bounty info from incidents (already included) but also check collected_data
+            bug_bounty_info = ""
+            # The incidents string should already include bug bounty info, but we can verify
+            
             prompt = f"""Generate a very short, concise summary (2-3 sentences maximum, under 200 characters) of the security posture for this software.
 
 Product: {entity_name}
@@ -782,11 +834,11 @@ Key Security Information:
 - Usage: {usage[:200]}
 - Vendor Reputation: {vendor_reputation[:200]}
 - CVEs: {cve_summary.total_cves} total ({cve_summary.critical_count} critical, {cve_summary.high_count} high), {cve_summary.cisa_kev_count} in CISA KEV
-- Incidents: {incidents[:150]}
+- Incidents & Bug Bounties: {incidents[:150]}
 - Data Handling: {data_handling[:150]}
 - Deployment Controls: {deployment_controls[:150]}
 
-Write a brief, executive-level summary that captures the overall security posture. Focus on the most critical aspects (CVEs, vendor reputation, data handling). Keep it under 200 characters.
+Write a brief, executive-level summary that captures the overall security posture. Focus on the most critical aspects (CVEs, vendor reputation, data handling, bug bounty reports if mentioned). Keep it under 200 characters.
 
 Respond with ONLY the summary text, no labels or prefixes."""
 
@@ -1653,6 +1705,26 @@ Important:
                     data_summary.append(f"Security Incidents: {len(incidents)} documented incidents found")
                     data_summary.append("")
                 
+                # Bug bounty reports
+                bug_bounties = collected_data.get("bug_bounties", {})
+                if bug_bounties and bug_bounties.get("total_reports", 0) > 0:
+                    data_summary.append("Bug Bounty Reports:")
+                    total = bug_bounties.get("total_reports", 0)
+                    h1_count = bug_bounties.get("hackerone_count", 0)
+                    bc_count = bug_bounties.get("bugcrowd_count", 0)
+                    data_summary.append(f"- Total public reports: {total}")
+                    data_summary.append(f"- HackerOne: {h1_count} reports")
+                    data_summary.append(f"- Bugcrowd: {bc_count} reports")
+                    # Include report titles for context
+                    reports = bug_bounties.get("reports", [])
+                    if reports:
+                        data_summary.append("- Sample reports:")
+                        for i, report in enumerate(reports[:5], 1):
+                            title = report.get("title", "Bug Report")
+                            platform = report.get("platform", "Unknown")
+                            data_summary.append(f"  {i}. [{platform}] {title}")
+                    data_summary.append("")
+                
                 # Citations count
                 data_summary.append(f"Data Sources: {len(security_posture.citations)} citations available")
                 
@@ -1671,10 +1743,11 @@ Consider these factors (in order of importance for security managers):
 1. CISA KEV entries (actively exploited vulnerabilities) - HIGHEST PRIORITY
 2. Critical and high-severity CVEs, especially version-specific ones
 3. VirusTotal detection rates and threat classifications
-4. Vendor reputation and security track record
-5. Data handling and compliance (SOC 2, ISO 27001, GDPR)
-6. Security incidents and abuse signals
-7. Trust score (use as one factor, not the sole determinant)
+4. Bug bounty reports (indicate active security research and potential vulnerabilities)
+5. Vendor reputation and security track record
+6. Data handling and compliance (SOC 2, ISO 27001, GDPR)
+7. Security incidents and abuse signals
+8. Trust score (use as one factor, not the sole determinant)
 
 CRITICAL: If the text says "not recommended" or "do not allow" or similar, the status MUST be "NOT RECOMMENDED" regardless of trust score.
 
