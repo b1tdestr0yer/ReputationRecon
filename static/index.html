@@ -311,125 +311,8 @@
             const versionInfo = detectedVersion ? ` | <strong>Version:</strong> ${detectedVersion}` : '';
             
             let html = `
-                <h2 style="margin-bottom: 10px;"><i class="fas fa-clipboard-check"></i> Assessment Results: ${data.entity_name}</h2>
+                <h2 style="margin-bottom: 10px;"><i class="fas fa-shield-alt"></i> Security Assessment: ${data.entity_name}</h2>
                 <p style="margin-bottom: 30px; color: #666;"><strong>Vendor:</strong> ${data.vendor_name} | <strong>Category:</strong> ${data.category}${versionInfo}</p>
-                
-                <div class="trust-score-container">
-                    <div class="gauge-wrapper">
-                        <div class="gauge-circle" style="--score: ${trustScore}; --gauge-color: ${gaugeColor};">
-                            <div class="gauge-inner">
-                                <div class="gauge-score" style="color: ${gaugeColor};">${trustScore}</div>
-                                <div class="gauge-label">/ 100</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="trust-score-info">
-                        <div>
-                            <span class="risk-badge ${riskClass}">${riskText}</span>
-                        </div>
-                        <div class="confidence-meter">
-                            <span style="font-weight: 600; min-width: 120px;">Confidence:</span>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: ${confidence}%"></div>
-                            </div>
-                            <span style="font-weight: 600;">${confidence}%</span>
-                        </div>
-                        <div>
-                            <p style="color: #666; line-height: 1.6;">${data.trust_score.rationale || 'No rationale provided'}</p>
-                        </div>
-                        <div>
-                            <h4 style="margin-bottom: 15px; color: #333;"><i class="fas fa-chart-line"></i> Key Factors</h4>
-                            <div class="factors-grid">
-                                ${factorsHTML}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="spider-chart-container">
-                    <h3><i class="fas fa-spider"></i> Risk Assessment Breakdown</h3>
-                    <div class="spider-chart-wrapper">
-                        <canvas id="spiderChart"></canvas>
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <h3><i class="fas fa-shield-alt"></i> Security Posture</h3>
-                    ${data.security_posture.summary ? `
-                        <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #2196F3;">
-                            <p style="margin: 0; font-weight: 600; color: #1976D2; font-size: 1.1em;">Executive Summary</p>
-                            <p style="margin: 10px 0 0 0; line-height: 1.6;">${data.security_posture.summary}</p>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="security-cards">
-                        <div class="security-card description">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-info-circle card-icon" style="color: #2196F3; font-size: 1.8em;"></i>
-                                    <div class="card-title">Description</div>
-                        </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.description}</div>
-                        </div>
-                        
-                        <div class="security-card usage">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-tasks card-icon" style="color: #9C27B0; font-size: 1.8em;"></i>
-                                    <div class="card-title">Usage</div>
-                                </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.usage}</div>
-                        </div>
-                        
-                        <div class="security-card reputation">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-star card-icon" style="color: #FF9800; font-size: 1.8em;"></i>
-                                    <div class="card-title">Vendor Reputation</div>
-                                </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.vendor_reputation}</div>
-                        </div>
-                        
-                        <div class="security-card data">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-database card-icon" style="color: #4CAF50; font-size: 1.8em;"></i>
-                                    <div class="card-title">Data Handling</div>
-                                </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.data_handling}</div>
-                        </div>
-                        
-                        <div class="security-card deployment">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-cog card-icon" style="color: #00BCD4; font-size: 1.8em;"></i>
-                                    <div class="card-title">Deployment Controls</div>
-                                </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.deployment_controls || 'No deployment controls information available.'}</div>
-                        </div>
-                        
-                        <div class="security-card incidents">
-                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i class="fas fa-exclamation-triangle card-icon" style="color: #F44336; font-size: 1.8em;"></i>
-                                    <div class="card-title">Incidents & Abuse</div>
-                                </div>
-                                <i class="fas fa-chevron-down security-card-toggle"></i>
-                            </div>
-                            <div class="security-card-content">${data.security_posture.incidents_abuse || 'No significant incidents reported.'}</div>
-                        </div>
-                    </div>
-                </div>
                 
                 <div class="section">
                     <h3><i class="fas fa-clipboard-check"></i> Security Recommendation</h3>
@@ -592,6 +475,125 @@
                             </div>
                         `;
                     })()}
+                </div>
+                
+                <div class="section">
+                    <h3><i class="fas fa-chart-line"></i> Assessment Results</h3>
+                <div class="trust-score-container">
+                    <div class="gauge-wrapper">
+                        <div class="gauge-circle" style="--score: ${trustScore}; --gauge-color: ${gaugeColor};">
+                            <div class="gauge-inner">
+                                <div class="gauge-score" style="color: ${gaugeColor};">${trustScore}</div>
+                                <div class="gauge-label">/ 100</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trust-score-info">
+                        <div>
+                            <span class="risk-badge ${riskClass}">${riskText}</span>
+                        </div>
+                        <div class="confidence-meter">
+                            <span style="font-weight: 600; min-width: 120px;">Confidence:</span>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${confidence}%"></div>
+                            </div>
+                            <span style="font-weight: 600;">${confidence}%</span>
+                        </div>
+                        <div>
+                            <p style="color: #666; line-height: 1.6;">${data.trust_score.rationale || 'No rationale provided'}</p>
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom: 15px; color: #333;"><i class="fas fa-chart-line"></i> Key Factors</h4>
+                            <div class="factors-grid">
+                                ${factorsHTML}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="spider-chart-container">
+                    <h3><i class="fas fa-spider"></i> Risk Assessment Breakdown</h3>
+                    <div class="spider-chart-wrapper">
+                        <canvas id="spiderChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3><i class="fas fa-shield-alt"></i> Security Posture</h3>
+                    ${data.security_posture.summary ? `
+                        <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #2196F3;">
+                            <p style="margin: 0; font-weight: 600; color: #1976D2; font-size: 1.1em;">Executive Summary</p>
+                            <p style="margin: 10px 0 0 0; line-height: 1.6;">${data.security_posture.summary}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="security-cards">
+                        <div class="security-card description">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-info-circle card-icon" style="color: #2196F3; font-size: 1.8em;"></i>
+                                    <div class="card-title">Description</div>
+                        </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.description}</div>
+                        </div>
+                        
+                        <div class="security-card usage">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-tasks card-icon" style="color: #9C27B0; font-size: 1.8em;"></i>
+                                    <div class="card-title">Usage</div>
+                                </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.usage}</div>
+                        </div>
+                        
+                        <div class="security-card reputation">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-star card-icon" style="color: #FF9800; font-size: 1.8em;"></i>
+                                    <div class="card-title">Vendor Reputation</div>
+                                </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.vendor_reputation}</div>
+                        </div>
+                        
+                        <div class="security-card data">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-database card-icon" style="color: #4CAF50; font-size: 1.8em;"></i>
+                                    <div class="card-title">Data Handling</div>
+                                </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.data_handling}</div>
+                        </div>
+                        
+                        <div class="security-card deployment">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-cog card-icon" style="color: #00BCD4; font-size: 1.8em;"></i>
+                                    <div class="card-title">Deployment Controls</div>
+                                </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.deployment_controls || 'No deployment controls information available.'}</div>
+                        </div>
+                        
+                        <div class="security-card incidents">
+                            <div class="security-card-header" onclick="toggleSecurityCard(event, this.closest('.security-card'))">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-exclamation-triangle card-icon" style="color: #F44336; font-size: 1.8em;"></i>
+                                    <div class="card-title">Incidents & Abuse</div>
+                                </div>
+                                <i class="fas fa-chevron-down security-card-toggle"></i>
+                            </div>
+                            <div class="security-card-content">${data.security_posture.incidents_abuse || 'No significant incidents reported.'}</div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="section">

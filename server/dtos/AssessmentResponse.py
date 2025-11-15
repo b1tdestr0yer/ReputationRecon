@@ -5,7 +5,7 @@ from enum import Enum
 
 
 class SoftwareCategory(str, Enum):
-    """Software taxonomy categories"""
+    """Software categories"""
     FILE_SHARING = "File Sharing"
     GENAI_TOOL = "GenAI Tool"
     SAAS_CRM = "SaaS CRM"
