@@ -68,12 +68,12 @@ const TrustScoreGauge = ({ trustScore }: TrustScoreGaugeProps) => {
           <span style={{ fontWeight: 600 }}>{confidence}%</span>
         </div>
         <div>
-          <p style={{ color: '#666', lineHeight: 1.6 }}>
+          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {trustScore.rationale || 'No rationale provided'}
           </p>
         </div>
         <div>
-          <h4 style={{ marginBottom: '15px', color: '#333' }}>
+          <h4 style={{ marginBottom: '15px', color: 'var(--text-primary)' }}>
             <i className="fas fa-chart-line"></i> Key Factors
           </h4>
           <div className="factors-grid">

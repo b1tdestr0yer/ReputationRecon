@@ -20,7 +20,7 @@ const SecurityPostureSection = ({ securityPosture }: SecurityPostureSectionProps
       {securityPosture.summary && (
         <div
           style={{
-            background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+            background: 'var(--loading-bg)',
             padding: '20px',
             borderRadius: '10px',
             marginBottom: '20px',
@@ -30,7 +30,7 @@ const SecurityPostureSection = ({ securityPosture }: SecurityPostureSectionProps
           <p style={{ margin: 0, fontWeight: 600, color: '#1976D2', fontSize: '1.1em' }}>
             Executive Summary
           </p>
-          <p style={{ margin: '10px 0 0 0', lineHeight: 1.6 }}>{securityPosture.summary}</p>
+          <p style={{ margin: '10px 0 0 0', lineHeight: 1.6, color: 'var(--text-primary)' }}>{securityPosture.summary}</p>
         </div>
       )}
 

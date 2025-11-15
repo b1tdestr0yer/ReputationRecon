@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { SecurityPosture, TrustScore } from '../types'
 
 interface SecurityRecommendationProps {
@@ -20,6 +21,24 @@ const SecurityRecommendation = ({
   cleanSuggestion = cleanSuggestion.replace(/\*\*([^*]+)\*\*/g, '$1')
   cleanSuggestion = cleanSuggestion.replace(/\*([^*]+)\*/g, '$1')
   cleanSuggestion = cleanSuggestion.replace(/_([^_]+)_/g, '$1')
+
+  // Get current theme reactively
+  const [isDarkMode, setIsDarkMode] = useState(() => 
+    document.documentElement.getAttribute('data-theme') === 'dark'
+  )
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.getAttribute('data-theme') === 'dark')
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   // Extract recommendation status from text
   let recStatus: string
@@ -44,7 +63,9 @@ const SecurityRecommendation = ({
   ) {
     recStatus = 'not-recommended'
     recColor = '#dc3545'
-    recBgGradient = 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)'
+    recBgGradient = isDarkMode
+      ? 'linear-gradient(135deg, #2a1a1a 0%, #3a1f1f 100%)'
+      : 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)'
     recBorderColor = '#dc3545'
     recIcon = 'fas fa-times-circle'
     recTitle = 'Not Recommended'
@@ -58,7 +79,9 @@ const SecurityRecommendation = ({
   ) {
     recStatus = 'caution'
     recColor = '#ff9800'
-    recBgGradient = 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)'
+    recBgGradient = isDarkMode
+      ? 'linear-gradient(135deg, #2a241a 0%, #3a2a1f 100%)'
+      : 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)'
     recBorderColor = '#ff9800'
     recIcon = 'fas fa-exclamation-triangle'
     recTitle = 'Use with Caution'
@@ -72,7 +95,9 @@ const SecurityRecommendation = ({
   ) {
     recStatus = 'conditional'
     recColor = '#ffc107'
-    recBgGradient = 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)'
+    recBgGradient = isDarkMode
+      ? 'linear-gradient(135deg, #2a261a 0%, #3a2f1f 100%)'
+      : 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)'
     recBorderColor = '#ffc107'
     recIcon = 'fas fa-check-circle'
     recTitle = 'Conditionally Approved'
@@ -85,7 +110,9 @@ const SecurityRecommendation = ({
   ) {
     recStatus = 'recommended'
     recColor = '#28a745'
-    recBgGradient = 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)'
+    recBgGradient = isDarkMode
+      ? 'linear-gradient(135deg, #1a2a1f 0%, #1f3a24 100%)'
+      : 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)'
     recBorderColor = '#28a745'
     recIcon = 'fas fa-check-circle'
     recTitle = 'Recommended'
@@ -104,7 +131,9 @@ const SecurityRecommendation = ({
     if (hasNegativeIndicators || cisaKev > 0 || trustScore < 35 || riskLevel === 'Critical') {
       recStatus = 'not-recommended'
       recColor = '#dc3545'
-      recBgGradient = 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)'
+      recBgGradient = isDarkMode
+        ? 'linear-gradient(135deg, #2a1a1a 0%, #3a1f1f 100%)'
+        : 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)'
       recBorderColor = '#dc3545'
       recIcon = 'fas fa-times-circle'
       recTitle = 'Not Recommended'
@@ -112,7 +141,9 @@ const SecurityRecommendation = ({
     } else if (trustScore < 55 || riskLevel === 'High' || criticalCves > 3) {
       recStatus = 'caution'
       recColor = '#ff9800'
-      recBgGradient = 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)'
+      recBgGradient = isDarkMode
+        ? 'linear-gradient(135deg, #2a241a 0%, #3a2a1f 100%)'
+        : 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)'
       recBorderColor = '#ff9800'
       recIcon = 'fas fa-exclamation-triangle'
       recTitle = 'Use with Caution'
@@ -120,7 +151,9 @@ const SecurityRecommendation = ({
     } else if (trustScore < 75 || riskLevel === 'Medium') {
       recStatus = 'conditional'
       recColor = '#ffc107'
-      recBgGradient = 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)'
+      recBgGradient = isDarkMode
+        ? 'linear-gradient(135deg, #2a261a 0%, #3a2f1f 100%)'
+        : 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)'
       recBorderColor = '#ffc107'
       recIcon = 'fas fa-check-circle'
       recTitle = 'Conditionally Approved'
@@ -128,7 +161,9 @@ const SecurityRecommendation = ({
     } else {
       recStatus = 'recommended'
       recColor = '#28a745'
-      recBgGradient = 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)'
+      recBgGradient = isDarkMode
+        ? 'linear-gradient(135deg, #1a2a1f 0%, #1f3a24 100%)'
+        : 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)'
       recBorderColor = '#28a745'
       recIcon = 'fas fa-check-circle'
       recTitle = 'Recommended'
@@ -160,19 +195,19 @@ const SecurityRecommendation = ({
           borderLeft: `5px solid ${recBorderColor}`,
           borderRadius: '12px',
           padding: '25px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          boxShadow: isDarkMode ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.1)',
           marginBottom: '20px',
         }}
       >
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px',
-            marginBottom: '20px',
-            paddingBottom: '15px',
-            borderBottom: '2px solid rgba(0,0,0,0.1)',
-          }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '15px',
+          marginBottom: '20px',
+          paddingBottom: '15px',
+          borderBottom: isDarkMode ? '2px solid rgba(255,255,255,0.1)' : '2px solid rgba(0,0,0,0.1)',
+        }}
         >
           <div
             style={{
@@ -192,12 +227,12 @@ const SecurityRecommendation = ({
             <h4 style={{ margin: 0, color: recColor, fontSize: '1.5em', fontWeight: 700 }}>
               {recTitle}
             </h4>
-            <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '0.95em' }}>
+            <p style={{ margin: '5px 0 0 0', color: isDarkMode ? 'var(--text-secondary)' : '#666', fontSize: '0.95em' }}>
               {recSubtitle}
             </p>
           </div>
         </div>
-        <div style={{ lineHeight: 1.8, color: '#333' }}>
+        <div style={{ lineHeight: 1.8, color: isDarkMode ? 'var(--text-primary)' : '#333' }}>
           {paragraphs.map((para, index) => {
             // Check if paragraph contains "Recommendation:" to make it stand out
             if (para.toLowerCase().includes('recommendation:')) {
@@ -233,7 +268,7 @@ const SecurityRecommendation = ({
             style={{
               marginTop: '20px',
               padding: '15px',
-              background: 'rgba(255,255,255,0.7)',
+              background: isDarkMode ? 'rgba(42, 42, 58, 0.7)' : 'rgba(255, 255, 255, 0.7)',
               borderRadius: '8px',
               borderLeft: `3px solid ${recColor}`,
             }}
@@ -241,7 +276,7 @@ const SecurityRecommendation = ({
             <p style={{ margin: 0, fontWeight: 600, color: recColor }}>
               <i className="fas fa-shield-alt"></i> Security Considerations:
             </p>
-            <ul style={{ margin: '10px 0 0 20px', paddingLeft: '10px', color: '#555' }}>
+            <ul style={{ margin: '10px 0 0 20px', paddingLeft: '10px', color: isDarkMode ? 'var(--text-secondary)' : '#555' }}>
               {securityPosture?.cve_summary?.cisa_kev_count > 0 && (
                 <li>
                   {securityPosture.cve_summary.cisa_kev_count} vulnerability(ies) actively

@@ -37,7 +37,7 @@ const LoadingIndicator = ({ isVisible }: LoadingIndicatorProps) => {
           <div className="spinner-ring"></div>
           <div className="spinner-ring"></div>
         </div>
-        <h3 style={{ color: '#333', marginBottom: '20px', fontSize: '1.5em' }}>
+        <h3 style={{ color: 'var(--text-primary)', marginBottom: '20px', fontSize: '1.5em' }}>
           Security Assessment in Progress
         </h3>
         <div className="loading-steps">

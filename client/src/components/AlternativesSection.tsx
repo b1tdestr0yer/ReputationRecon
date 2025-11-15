@@ -21,7 +21,7 @@ const AlternativesSection = ({ alternatives }: AlternativesSectionProps) => {
               <i className="fas fa-check-circle card-icon" style={{ color: '#4caf50' }}></i>
               <div className="card-title">{alt.name}</div>
             </div>
-            <div style={{ color: '#666', marginBottom: '10px' }}>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: '10px' }}>
               <strong>Vendor:</strong> {alt.vendor}
             </div>
             <div className="card-content">{alt.rationale}</div>

@@ -65,7 +65,7 @@ const Results = ({ data, assessmentParams, onRefresh }: ResultsProps) => {
         <i className="fas fa-shield-alt"></i> Security Assessment: {currentData.entity_name}
       </h2>
       <p
-        style={{ marginBottom: '30px', color: '#666' }}
+        style={{ marginBottom: '30px', color: 'var(--text-secondary)' }}
         dangerouslySetInnerHTML={{
           __html: `<strong>Vendor:</strong> ${currentData.vendor_name} | <strong>Category:</strong> ${currentData.category}${versionInfo}`,
         }}

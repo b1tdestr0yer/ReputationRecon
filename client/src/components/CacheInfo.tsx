@@ -58,8 +58,9 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
       expiresBadge = (
         <span
           style={{
-            background: '#fff3cd',
+            background: 'var(--card-bg)',
             color: '#856404',
+            border: '1px solid #ffc107',
             padding: '4px 10px',
             borderRadius: '12px',
             fontSize: '0.8em',
@@ -75,8 +76,9 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
       expiresBadge = (
         <span
           style={{
-            background: '#fff3cd',
+            background: 'var(--card-bg)',
             color: '#856404',
+            border: '1px solid #ffc107',
             padding: '4px 10px',
             borderRadius: '12px',
             fontSize: '0.8em',
@@ -92,8 +94,9 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
       expiresBadge = (
         <span
           style={{
-            background: '#f8d7da',
+            background: 'var(--card-bg)',
             color: '#721c24',
+            border: '1px solid #dc3545',
             padding: '4px 10px',
             borderRadius: '12px',
             fontSize: '0.8em',
@@ -111,7 +114,7 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
     <div className="section" style={{ marginTop: '40px' }}>
       <div
         style={{
-          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+          background: 'var(--section-bg)',
           padding: '20px',
           borderRadius: '12px',
           borderLeft: '4px solid #667eea',
@@ -138,13 +141,13 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
             >
               <i className="fas fa-clock" style={{ color: '#667eea', fontSize: '1.3em' }}></i>
               <div>
-                <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '2px' }}>
+                <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '2px' }}>
                   Assessment Performed
                 </div>
-                <div style={{ fontWeight: 600, color: '#333', fontSize: '1em' }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1em' }}>
                   {formattedDate}
                 </div>
-                <div style={{ fontSize: '0.85em', color: '#999', marginTop: '2px' }}>
+                <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {relativeTime}
                 </div>
               </div>
@@ -169,23 +172,23 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
                       gap: '8px',
                     }}
                   >
-                    <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '2px' }}>
+                                        <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '2px' }}>
                       Retrieved from Cache
                     </div>
                     {expiresBadge}
                   </div>
-                  <div style={{ fontWeight: 600, color: '#333', fontSize: '1em' }}>
-                    {formatDate(cachedAt)}
-                  </div>
-                  <div style={{ fontSize: '0.85em', color: '#999', marginTop: '2px' }}>
-                    Cached {getRelativeTime(cachedAt)}
-                  </div>
-                  {expiresInfo && (
-                    <div style={{ fontSize: '0.85em', color: '#666', marginTop: '4px' }}>
-                      <i className="fas fa-hourglass-half" style={{ marginRight: '4px' }}></i>
-                      {expiresInfo}
+                                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1em' }}>
+                      {formatDate(cachedAt)}
                     </div>
-                  )}
+                    <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Cached {getRelativeTime(cachedAt)}
+                    </div>
+                    {expiresInfo && (
+                      <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        <i className="fas fa-hourglass-half" style={{ marginRight: '4px' }}></i>
+                        {expiresInfo}
+                      </div>
+                    )}
                 </div>
               </div>
             ) : (
@@ -198,13 +201,13 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
               >
                 <i className="fas fa-sync-alt" style={{ color: '#28a745', fontSize: '1.3em' }}></i>
                 <div>
-                  <div style={{ fontSize: '0.85em', color: '#666', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '2px' }}>
                     Cache Status
                   </div>
-                  <div style={{ fontWeight: 600, color: '#333', fontSize: '1em' }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1em' }}>
                     Fresh Assessment
                   </div>
-                  <div style={{ fontSize: '0.85em', color: '#999', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '2px' }}>
                     Generated just now
                   </div>
                 </div>

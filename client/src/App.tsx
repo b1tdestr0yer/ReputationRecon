@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ThemeProvider } from './contexts/ThemeContext'
+import TopBar from './components/TopBar'
 import Header from './components/Header'
 import SingleAssessmentForm from './components/SingleAssessmentForm'
 import CompareModeForm from './components/CompareModeForm'
@@ -40,14 +42,16 @@ function App() {
   }
 
   return (
-    <div className="container">
-      <Header />
-      
-      <div className="form-group">
-        <button onClick={toggleMode} className="btn-secondary">
-          {isCompareMode ? 'Switch to Single Mode' : 'Switch to Compare Mode'}
-        </button>
-      </div>
+    <ThemeProvider>
+      <TopBar />
+      <div className="container">
+        <Header />
+        
+        <div className="form-group">
+          <button onClick={toggleMode} className="btn-secondary">
+            {isCompareMode ? 'Switch to Single Mode' : 'Switch to Compare Mode'}
+          </button>
+        </div>
 
       {!isCompareMode ? (
         <SingleAssessmentForm
@@ -61,15 +65,16 @@ function App() {
         />
       )}
 
-      <LoadingIndicator isVisible={isLoading} />
-      {assessmentData && assessmentParams && (
-        <Results
-          data={assessmentData}
-          assessmentParams={assessmentParams}
-          onRefresh={(newData) => setAssessmentData(newData)}
-        />
-      )}
-    </div>
+        <LoadingIndicator isVisible={isLoading} />
+        {assessmentData && assessmentParams && (
+          <Results
+            data={assessmentData}
+            assessmentParams={assessmentParams}
+            onRefresh={(newData) => setAssessmentData(newData)}
+          />
+        )}
+      </div>
+    </ThemeProvider>
   )
 }
 

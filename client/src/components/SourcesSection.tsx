@@ -31,7 +31,7 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
           >
             <div
               style={{
-                background: 'white',
+                background: 'var(--card-bg)',
                 padding: '15px',
                 borderRadius: '8px',
                 textAlign: 'center',
@@ -41,11 +41,11 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
               <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#ff5722' }}>
                 {bugBountyCitations.length}
               </div>
-              <div style={{ color: '#666', marginTop: '5px' }}>Total Reports</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Total Reports</div>
             </div>
             <div
               style={{
-                background: 'white',
+                background: 'var(--card-bg)',
                 padding: '15px',
                 borderRadius: '8px',
                 textAlign: 'center',
@@ -55,11 +55,11 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
               <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#ff9800' }}>
                 {bugBountyCitations.filter((c) => c.source_type === 'HackerOne').length}
               </div>
-              <div style={{ color: '#666', marginTop: '5px' }}>HackerOne</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>HackerOne</div>
             </div>
             <div
               style={{
-                background: 'white',
+                background: 'var(--card-bg)',
                 padding: '15px',
                 borderRadius: '8px',
                 textAlign: 'center',
@@ -69,7 +69,7 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
               <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#9c27b0' }}>
                 {bugBountyCitations.filter((c) => c.source_type === 'Bugcrowd').length}
               </div>
-              <div style={{ color: '#666', marginTop: '5px' }}>Bugcrowd</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Bugcrowd</div>
             </div>
           </div>
           <h4 style={{ marginTop: '20px', marginBottom: '15px' }}>Public Bug Bounty Reports</h4>
@@ -94,7 +94,7 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
                     <span>{citation.source}</span>
                   )}
                   <br />
-                  <em style={{ color: '#666' }}>{citation.claim}</em>
+                  <em style={{ color: 'var(--text-secondary)' }}>{citation.claim}</em>
                 </div>
               )
             })}
@@ -136,7 +136,7 @@ const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => 
                     <span>{displayText}</span>
                   )}
                   <br />
-                  <em style={{ color: '#666' }}>{citation.claim}</em>
+                  <em style={{ color: 'var(--text-secondary)' }}>{citation.claim}</em>
                 </div>
               )
             })

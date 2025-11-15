@@ -1,8 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Chart, ChartConfiguration, registerables } from 'chart.js'
 import { AssessmentResponse } from '../types'
 
 Chart.register(...registerables)
+
+// Function to get current theme
+const getCurrentTheme = () => {
+  return document.documentElement.getAttribute('data-theme') || 'light'
+}
 
 interface SpiderChartProps {
   data: AssessmentResponse
@@ -11,11 +16,27 @@ interface SpiderChartProps {
 const SpiderChart = ({ data }: SpiderChartProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartInstanceRef = useRef<Chart | null>(null)
+  const [isDarkMode, setIsDarkMode] = useState(() => getCurrentTheme() === 'dark')
+
+  // Listen for theme changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(getCurrentTheme() === 'dark')
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     if (!canvasRef.current) return
 
     const scores = calculateSpiderChartScores(data)
+    const isDark = getCurrentTheme() === 'dark'
 
     // Destroy previous chart if exists
     if (chartInstanceRef.current) {
@@ -54,8 +75,8 @@ const SpiderChart = ({ data }: SpiderChartProps) => {
             borderColor: 'rgba(102, 126, 234, 0.8)',
             borderWidth: 2,
             pointBackgroundColor: colors.map((c) => c.point),
-            pointBorderColor: '#fff',
-            pointHoverBackgroundColor: '#fff',
+            pointBorderColor: isDark ? '#2a2a3a' : '#fff',
+            pointHoverBackgroundColor: isDark ? '#2a2a3a' : '#fff',
             pointHoverBorderColor: colors.map((c) => c.border),
             pointRadius: 5,
             pointHoverRadius: 7,
@@ -75,15 +96,22 @@ const SpiderChart = ({ data }: SpiderChartProps) => {
               font: {
                 size: 11,
               },
+              color: isDark ? 'rgba(224, 224, 224, 0.8)' : 'rgba(0, 0, 0, 0.7)',
+              backdropColor: 'transparent',
             },
             pointLabels: {
               font: {
                 size: 13,
                 weight: 'bold',
               },
+              color: isDark ? 'rgba(224, 224, 224, 0.9)' : 'rgba(0, 0, 0, 0.8)',
+              backdropColor: 'transparent',
             },
             grid: {
-              color: 'rgba(0, 0, 0, 0.1)',
+              color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            },
+            angleLines: {
+              color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
             },
           },
         },
@@ -120,7 +148,7 @@ const SpiderChart = ({ data }: SpiderChartProps) => {
         chartInstanceRef.current = null
       }
     }
-  }, [data])
+  }, [data, isDarkMode])
 
   const calculateSpiderChartScores = (data: AssessmentResponse) => {
     let virustotalScore = 50

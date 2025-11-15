@@ -74,7 +74,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
               className="cve-pagination-btn"
               onClick={() => goToPage(1)}
               style={{
-                background: 'white',
+                background: 'var(--card-bg)',
                 color: '#667eea',
                 border: '2px solid #667eea',
                 padding: '8px 12px',
@@ -87,7 +87,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
             >
               1
             </button>
-            {startPage > 2 && <span style={{ color: '#999', padding: '0 8px' }}>...</span>}
+            {startPage > 2 && <span style={{ color: 'var(--text-muted)', padding: '0 8px' }}>...</span>}
           </>
         )}
 
@@ -99,7 +99,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
               className="cve-pagination-btn"
               onClick={() => goToPage(page)}
               style={{
-                background: isActive ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+                background: isActive ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'var(--card-bg)',
                 color: isActive ? 'white' : '#667eea',
                 border: `2px solid ${isActive ? 'transparent' : '#667eea'}`,
                 padding: '8px 12px',
@@ -118,12 +118,12 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
 
         {endPage < totalPages && (
           <>
-            {endPage < totalPages - 1 && <span style={{ color: '#999', padding: '0 8px' }}>...</span>}
+            {endPage < totalPages - 1 && <span style={{ color: 'var(--text-muted)', padding: '0 8px' }}>...</span>}
             <button
               className="cve-pagination-btn"
               onClick={() => goToPage(totalPages)}
               style={{
-                background: 'white',
+                background: 'var(--card-bg)',
                 color: '#667eea',
                 border: '2px solid #667eea',
                 padding: '8px 12px',
@@ -171,7 +171,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
         <h3>
           <i className="fas fa-bug"></i> CVE Analysis
         </h3>
-        <p style={{ color: '#666', fontStyle: 'italic' }}>No CVEs found in the database.</p>
+        <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No CVEs found in the database.</p>
       </div>
     )
   }
@@ -184,7 +184,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
       {cveSummary.detected_version && (
         <div
           style={{
-            background: '#f0f0f0',
+            background: 'var(--section-bg)',
             padding: '15px',
             borderRadius: '8px',
             marginBottom: '20px',
@@ -210,7 +210,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
       >
         <div
           style={{
-            background: 'white',
+            background: 'var(--card-bg)',
             padding: '15px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -220,11 +220,11 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
           <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#667eea' }}>
             {cveSummary.total_cves}
           </div>
-          <div style={{ color: '#666', marginTop: '5px' }}>Total CVEs</div>
+          <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Total CVEs</div>
         </div>
         <div
           style={{
-            background: 'white',
+            background: 'var(--card-bg)',
             padding: '15px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -234,11 +234,11 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
           <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#f44336' }}>
             {cveSummary.critical_count}
           </div>
-          <div style={{ color: '#666', marginTop: '5px' }}>Critical</div>
+          <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>Critical</div>
         </div>
         <div
           style={{
-            background: 'white',
+            background: 'var(--card-bg)',
             padding: '15px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -248,11 +248,11 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
           <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#ff6f00' }}>
             {cveSummary.high_count}
           </div>
-          <div style={{ color: '#666', marginTop: '5px' }}>High</div>
+          <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>High</div>
         </div>
         <div
           style={{
-            background: 'white',
+            background: 'var(--card-bg)',
             padding: '15px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -262,7 +262,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
           <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#9c27b0' }}>
             {cveSummary.cisa_kev_count}
           </div>
-          <div style={{ color: '#666', marginTop: '5px' }}>CISA KEV</div>
+          <div style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>CISA KEV</div>
         </div>
       </div>
 
@@ -283,7 +283,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
             ? `(Showing ${allCVEs.length} of ${cveSummary.total_cves} total)`
             : `(${allCVEs.length} total)`}
         </h4>
-        <div id="cvePaginationInfo" style={{ color: '#666', fontSize: '0.9em', fontWeight: 500 }}>
+        <div id="cvePaginationInfo" style={{ color: 'var(--text-secondary)', fontSize: '0.9em', fontWeight: 500 }}>
           Showing {startIndex + 1}-{endIndex} of {allCVEs.length}
         </div>
       </div>
@@ -342,7 +342,7 @@ const CVEAnalysisSection = ({ cveSummary }: CVEAnalysisSectionProps) => {
       {renderPagination()}
 
       {allCVEs.length < cveSummary.total_cves && (
-        <p style={{ color: '#666', fontStyle: 'italic', marginTop: '10px' }}>
+        <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '10px' }}>
           Note: Only the most recent {allCVEs.length} CVEs are shown.
         </p>
       )}
