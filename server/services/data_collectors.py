@@ -765,16 +765,43 @@ class CIRCLHashlookupCollector(DataCollector):
                         "trust": data.get("hashlookup:trust", 50)
                     }
                     
-                    # Extract product information
-                    product_code = data.get("ProductCode", {})
+                    # Extract product information - try multiple possible structures
+                    product_code = data.get("ProductCode")
                     if product_code:
-                        version_info["product_name"] = product_code.get("ProductName", "")
-                        version_info["product_version"] = product_code.get("ProductVersion", "")
+                        # Handle ProductCode as a dictionary/object
+                        if isinstance(product_code, dict):
+                            version_info["product_name"] = (product_code.get("ProductName", "") or product_code.get("product_name", "")).strip()
+                            version_info["product_version"] = (product_code.get("ProductVersion", "") or product_code.get("product_version", "")).strip()
+                        # Handle ProductCode as a string (some APIs return it this way)
+                        elif isinstance(product_code, str):
+                            # Try to extract from string format if needed
+                            version_info["product_name"] = product_code.strip()
+                    
+                    # Also check for direct fields in the response (some APIs structure differently)
+                    if not version_info["product_version"]:
+                        version_info["product_version"] = (
+                            data.get("ProductVersion", "") or 
+                            data.get("product_version", "") or
+                            data.get("Version", "") or
+                            data.get("version", "") or
+                            data.get("FileVersion", "") or
+                            data.get("file_version", "")
+                        ).strip()
+                    
+                    if not version_info["product_name"]:
+                        version_info["product_name"] = (
+                            data.get("ProductName", "") or
+                            data.get("product_name", "") or
+                            data.get("Name", "") or
+                            data.get("name", "")
+                        ).strip()
                     
                     if version_info["product_name"] or version_info["product_version"]:
                         print(f"[CIRCL Hashlookup] ✓ Found product: {version_info['product_name']} version {version_info['product_version']}")
                     else:
                         print(f"[CIRCL Hashlookup] ⚠ No product version information found")
+                        # Debug: print available keys to help diagnose
+                        print(f"[CIRCL Hashlookup] Debug - Available keys in response: {list(data.keys())[:10]}")
                     
                     return version_info
                 elif response.status_code == 404:

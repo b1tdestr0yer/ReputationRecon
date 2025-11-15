@@ -92,8 +92,11 @@ class AssessmentService:
         print(f"  - VirusTotal: {'✓' if collected_data.get('virustotal') else '✗'}")
         hashlookup_info = collected_data.get('hashlookup')
         if hashlookup_info and hashlookup_info.get('found'):
-            version = hashlookup_info.get('product_version', 'unknown')
-            print(f"  - CIRCL Hashlookup: ✓ (Version: {version})")
+            version = hashlookup_info.get('product_version', '') or 'unknown'
+            if version and version != 'unknown':
+                print(f"  - CIRCL Hashlookup: ✓ (Version: {version})")
+            else:
+                print(f"  - CIRCL Hashlookup: ✓ (Version information not available)")
         else:
             print(f"  - CIRCL Hashlookup: ✗")
         
@@ -260,9 +263,11 @@ class AssessmentService:
         # First, try to get version from hashlookup
         if hashlookup_info and hashlookup_info.get("found"):
             product_version = hashlookup_info.get("product_version")
-            if product_version:
+            # Check if version exists and is not empty
+            if product_version and product_version.strip():
                 print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
                 version_source = "hashlookup"
+                product_version = product_version.strip()
         
         # Then, try to get latest version from vendor page (this takes precedence as it's the "latest")
         if vendor_page and vendor_page.get("content") and vendor_page.get("url"):

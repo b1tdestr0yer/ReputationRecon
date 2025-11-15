@@ -796,47 +796,47 @@ Respond with ONLY the summary text, no labels or prefixes."""
         if cve.detected_version and cve.version_specific_cves > 0:
             # Version-specific CVEs have higher impact
             if cve.version_specific_cves > 20:
-                score -= 30
-                factors["high_version_cve_count"] = -30
+                score -= 18
+                factors["high_version_cve_count"] = -18
             elif cve.version_specific_cves > 10:
-                score -= 20
-                factors["moderate_version_cve_count"] = -20
-            elif cve.version_specific_cves > 5:
                 score -= 12
-                factors["some_version_cves"] = -12
+                factors["moderate_version_cve_count"] = -12
+            elif cve.version_specific_cves > 5:
+                score -= 7
+                factors["some_version_cves"] = -7
             else:
-                score -= 6
-                factors["few_version_cves"] = -6
+                score -= 4
+                factors["few_version_cves"] = -4
             
             # Version-specific critical CVEs are very concerning
             if cve.version_specific_critical > 5:
-                score -= 25
-                factors["many_version_critical_cves"] = -25
-            elif cve.version_specific_critical > 0:
                 score -= 15
-                factors["version_critical_cves"] = -15
+                factors["many_version_critical_cves"] = -15
+            elif cve.version_specific_critical > 0:
+                score -= 9
+                factors["version_critical_cves"] = -9
             
             # Version-specific high CVEs
             if cve.version_specific_high > 10:
-                score -= 15
-                factors["many_version_high_cves"] = -15
+                score -= 9
+                factors["many_version_high_cves"] = -9
             elif cve.version_specific_high > 0:
-                score -= 8
-                factors["version_high_cves"] = -8
+                score -= 5
+                factors["version_high_cves"] = -5
         
         # Total CVE impact (less weight than version-specific, but still important)
         if cve.total_cves > 50:
-            score -= 20
-            factors["high_cve_count"] = -20
-        elif cve.total_cves > 20:
             score -= 12
-            factors["moderate_cve_count"] = -12
+            factors["high_cve_count"] = -12
+        elif cve.total_cves > 20:
+            score -= 7
+            factors["moderate_cve_count"] = -7
         elif cve.total_cves > 5:
-            score -= 6
-            factors["some_cves"] = -6
+            score -= 4
+            factors["some_cves"] = -4
         elif cve.total_cves > 0:
-            score -= 2
-            factors["few_cves"] = -2
+            score -= 1
+            factors["few_cves"] = -1
         else:
             # No CVEs is actually positive (but don't over-weight it)
             if not (cve.detected_version and cve.version_specific_cves > 0):
@@ -845,18 +845,18 @@ Respond with ONLY the summary text, no labels or prefixes."""
 
         # CISA KEV is very serious
         if cve.cisa_kev_count > 0:
-            score -= 35
-            factors["cisa_kev"] = -35
+            score -= 21
+            factors["cisa_kev"] = -21
 
         # Total critical CVEs (less weight if we have version-specific data)
         if cve.critical_count > 5:
             if not (cve.detected_version and cve.version_specific_critical > 0):
-                score -= 15
-                factors["many_critical_cves"] = -15
+                score -= 9
+                factors["many_critical_cves"] = -9
         elif cve.critical_count > 0:
             if not (cve.detected_version and cve.version_specific_critical > 0):
-                score -= 8
-                factors["critical_cves"] = -8
+                score -= 5
+                factors["critical_cves"] = -5
 
         # VirusTotal analysis (enhanced with v3 data and confidence scoring)
         if vt and vt.get("response_code") == 1:
@@ -872,6 +872,47 @@ Respond with ONLY the summary text, no labels or prefixes."""
             false_positive_indicators = vt.get("false_positive_indicators", [])
             community_malicious = vt.get("community_malicious", 0)
             community_harmless = vt.get("community_harmless", 0)
+            last_analysis_results = vt.get("last_analysis_results", {})
+            
+            # Trusted vendors that are considered reliable indicators of true positives
+            trusted_vendors = {
+                "bitdefender", "bitdefenderfalx", "clamav", "crowdstrike", "crowstrike",
+                "kaspersky", "microsoft", "fortinet", "google", "withsecure",
+                "palo alto networks", "paloalto", "sentinel one", "sentinelone"
+            }
+            
+            # Count trusted vs untrusted vendor detections
+            trusted_detections = 0
+            untrusted_detections = 0
+            trusted_vendor_names = []
+            
+            if last_analysis_results and isinstance(last_analysis_results, dict):
+                for vendor_name, result_data in last_analysis_results.items():
+                    if isinstance(result_data, dict):
+                        category = result_data.get("category", "").lower()
+                        # Check if vendor detected as malicious or suspicious
+                        if category in ["malicious", "suspicious"]:
+                            vendor_lower = vendor_name.lower().strip()
+                            # Check if vendor is in trusted list (case-insensitive, handle variations)
+                            # Match if vendor name contains trusted vendor name or vice versa
+                            # Also handle multi-word vendor names like "Palo Alto Networks"
+                            is_trusted = False
+                            for trusted in trusted_vendors:
+                                # Exact match or contains as whole word
+                                if (trusted == vendor_lower or 
+                                    trusted in vendor_lower or 
+                                    vendor_lower in trusted or
+                                    # Handle spaces: "palo alto" matches "paloalto"
+                                    trusted.replace(" ", "") == vendor_lower.replace(" ", "") or
+                                    vendor_lower.replace(" ", "") == trusted.replace(" ", "")):
+                                    is_trusted = True
+                                    break
+                            
+                            if is_trusted:
+                                trusted_detections += 1
+                                trusted_vendor_names.append(vendor_name)
+                            else:
+                                untrusted_detections += 1
             
             # Apply confidence weighting to all VT-based score adjustments
             confidence_multiplier = risk_confidence
@@ -894,45 +935,66 @@ Respond with ONLY the summary text, no labels or prefixes."""
                 # Flagged by vendors is negative - use enhanced risk assessment with confidence
                 flag_ratio = positives / total if total > 0 else 0
                 
-                # Check for false positive indicators - reduce penalty if present
-                fp_reduction = 0.5 if false_positive_indicators else 1.0
-                
-                # Critical risk: high detection rate or known threats
-                if risk_level == "critical":
+                # Calculate base penalty based on total positives (much more weight for many positives)
+                # Scale penalty significantly with number of positives
+                if positives >= 30:
+                    base_penalty = 60  # Very high penalty for many detections
+                elif positives >= 20:
+                    base_penalty = 50
+                elif positives >= 15:
+                    base_penalty = 40
+                elif positives >= 10:
                     base_penalty = 35
-                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
-                    score -= adjusted_penalty
-                    factors["virustotal_critical"] = -adjusted_penalty
-                elif risk_level == "high":
-                    # High risk: >10% flagged or primarily malicious
-                    if malicious > suspicious * 2:
-                        base_penalty = 30
-                    else:
-                        base_penalty = 20
-                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
-                    score -= adjusted_penalty
-                    if malicious > suspicious * 2:
-                        factors["virustotal_malicious"] = -adjusted_penalty
-                    else:
-                        factors["virustotal_flagged"] = -adjusted_penalty
-                elif risk_level == "medium":
-                    # Medium risk: some detections but not overwhelming
-                    if threat_names:
-                        base_penalty = 18
-                    else:
-                        base_penalty = 12
-                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
-                    score -= adjusted_penalty
-                    if threat_names:
-                        factors["virustotal_threat_classified"] = -adjusted_penalty
-                    else:
-                        factors["virustotal_suspicious"] = -adjusted_penalty
+                elif positives >= 5:
+                    base_penalty = 25
                 else:
-                    # Low risk: few detections
-                    base_penalty = 8
-                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
-                    score -= adjusted_penalty
-                    factors["virustotal_low_risk"] = -adjusted_penalty
+                    base_penalty = 15
+                
+                # Trusted vendor detections are weighted much more heavily
+                # Each trusted vendor detection adds significant penalty
+                trusted_penalty = trusted_detections * 8  # 8 points per trusted vendor detection
+                
+                # Untrusted detections are treated as potential false positives (reduced weight)
+                # Only count untrusted detections if there are many of them
+                untrusted_penalty = 0
+                if untrusted_detections >= 10:
+                    untrusted_penalty = (untrusted_detections - 10) * 1  # Minimal weight
+                elif untrusted_detections >= 5:
+                    untrusted_penalty = (untrusted_detections - 5) * 0.5  # Very minimal weight
+                
+                # If we have trusted vendor detections, they override the base penalty logic
+                if trusted_detections > 0:
+                    # Trusted detections are the primary factor
+                    total_penalty = base_penalty + trusted_penalty + int(untrusted_penalty)
+                    # Additional multiplier if multiple trusted vendors agree
+                    if trusted_detections >= 3:
+                        total_penalty = int(total_penalty * 1.3)  # 30% more if 3+ trusted vendors
+                    elif trusted_detections >= 2:
+                        total_penalty = int(total_penalty * 1.15)  # 15% more if 2+ trusted vendors
+                else:
+                    # No trusted detections - treat as potential false positives
+                    # Reduce penalty significantly if only untrusted detections
+                    if untrusted_detections > 0 and trusted_detections == 0:
+                        total_penalty = int(base_penalty * 0.3) + int(untrusted_penalty)  # 70% reduction
+                    else:
+                        total_penalty = base_penalty + int(untrusted_penalty)
+                
+                # Apply confidence multiplier
+                adjusted_penalty = int(total_penalty * confidence_multiplier)
+                score -= adjusted_penalty
+                
+                # Record factors
+                if trusted_detections > 0:
+                    factors[f"virustotal_trusted_vendors_{trusted_detections}"] = -adjusted_penalty
+                    if trusted_detections >= 3:
+                        factors["multiple_trusted_vendors"] = "high_confidence"
+                else:
+                    if positives >= 30:
+                        factors["virustotal_many_detections"] = -adjusted_penalty
+                    elif positives >= 15:
+                        factors["virustotal_moderate_detections"] = -adjusted_penalty
+                    else:
+                        factors["virustotal_few_detections"] = -adjusted_penalty
                 
                 # Additional penalties for reputation (only if high confidence)
                 if reputation < -50 and risk_confidence > 0.7:
