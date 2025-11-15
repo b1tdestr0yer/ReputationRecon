@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-import google.generativeai as genai
+import httpx
 from dotenv import load_dotenv
 
 from server.dtos.AssessmentResponse import (
@@ -15,30 +15,80 @@ load_dotenv()
 
 
 class AISynthesizer:
-    """Clean, deterministic, predictable Gemini-based synthesis."""
+    """Clean, deterministic, predictable Gemini-based synthesis using Vertex AI REST API."""
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
-            # Use gemini-2.5-flash (faster) or gemini-2.5-pro (more capable)
-            try:
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
-                self.use_ai = True
-                print("[AI Synthesizer] ✓ Google Gemini configured for AI-powered synthesis (using gemini-2.5-flash)")
-            except Exception as e:
-                print(f"[AI Synthesizer] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
-                try:
-                    self.model = genai.GenerativeModel('gemini-2.5-pro')
-                    self.use_ai = True
-                    print("[AI Synthesizer] ✓ Google Gemini configured (using gemini-2.5-pro)")
-                except Exception as e2:
-                    print(f"[AI Synthesizer] ✗ Error initializing Gemini models: {e2}, using basic synthesis")
-                    self.model = None
-                    self.use_ai = False
+        self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.model_name = "gemini-2.5-flash-lite"  # Using flash-lite as shown in user's example
+        self.base_url = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+        
+        if self.api_key:
+            self.use_ai = True
+            print(f"[AI Synthesizer] ✓ Vertex AI configured for AI-powered synthesis (using {self.model_name})")
         else:
-            self.model = None
             self.use_ai = False
+            print("[AI Synthesizer] ✗ No API key found, using basic synthesis")
+    
+    async def _call_vertex_ai(self, prompt: str) -> Optional[str]:
+        """Call Vertex AI REST API and return the generated text.
+        
+        Uses the Vertex AI REST API endpoint as documented at:
+        https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference
+        """
+        if not self.use_ai or not self.api_key:
+            return None
+        
+        try:
+            # Use generateContent (non-streaming) endpoint
+            # Format: https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent
+            url = f"{self.base_url}/{self.model_name}:generateContent"
+            params = {"key": self.api_key}
+            
+            # Request payload format per Vertex AI documentation
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, params=params, json=payload)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # Extract text from Vertex AI response structure
+                # Response format: {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
+                if "candidates" in data and len(data["candidates"]) > 0:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        parts = candidate["content"]["parts"]
+                        if len(parts) > 0 and "text" in parts[0]:
+                            return parts[0]["text"]
+                
+                # Fallback: try to find text anywhere in the response
+                if "text" in str(data):
+                    text_match = re.search(r'"text":\s*"([^"]+)"', json.dumps(data))
+                    if text_match:
+                        return text_match.group(1)
+                
+                print(f"[AI Synthesizer] ⚠ Unexpected response format: {json.dumps(data)[:200]}")
+                return None
+                
+        except httpx.HTTPStatusError as e:
+            error_text = e.response.text[:500] if hasattr(e.response, 'text') else str(e)
+            print(f"[AI Synthesizer] ⚠ HTTP error calling Vertex AI: {e.response.status_code} - {error_text}")
+            return None
+        except Exception as e:
+            print(f"[AI Synthesizer] ⚠ Error calling Vertex AI: {e}")
+            return None
 
     # -------------------------------------------------------------------------
     # MAIN SYNTHESIS METHOD
@@ -63,26 +113,26 @@ class AISynthesizer:
         
         # Extract information from collected data
         print(f"[AI Synthesizer] Extracting description...")
-        description = self._extract_description(collected_data)
+        description = await self._extract_description(collected_data)
         print(f"[AI Synthesizer] Extracting usage...")
-        usage = self._extract_usage(collected_data, category)
+        usage = await self._extract_usage(collected_data, category)
         print(f"[AI Synthesizer] Extracting vendor reputation...")
-        vendor_reputation = self._extract_vendor_reputation(collected_data)
+        vendor_reputation = await self._extract_vendor_reputation(collected_data)
         print(f"[AI Synthesizer] Extracting CVE summary...")
         cve_summary = self._extract_cve_summary(collected_data)
         print(f"[AI Synthesizer] Extracting incidents...")
-        incidents = self._extract_incidents(collected_data)
+        incidents = await self._extract_incidents(collected_data)
         print(f"[AI Synthesizer] Extracting data handling info...")
-        data_handling = self._extract_data_handling(collected_data)
+        data_handling = await self._extract_data_handling(collected_data)
         print(f"[AI Synthesizer] Extracting deployment controls...")
-        deployment = self._extract_deployment_controls(collected_data)
+        deployment = await self._extract_deployment_controls(collected_data)
         print(f"[AI Synthesizer] Extracting citations...")
         citations = self._extract_citations(collected_data)
         print(f"[AI Synthesizer] ✓ Extracted {len(citations)} citations")
         
         # Generate short summary after all data is extracted
         print(f"[AI Synthesizer] Generating security posture summary...")
-        summary = self._generate_security_posture_summary(
+        summary = await self._generate_security_posture_summary(
             entity_name, vendor_name, category,
             description, usage, vendor_reputation, cve_summary,
             incidents, data_handling, deployment
@@ -103,7 +153,7 @@ class AISynthesizer:
     # -------------------------------------------------------------------------
     # DESCRIPTION
     # -------------------------------------------------------------------------
-    def _extract_description(self, data: Dict) -> str:
+    async def _extract_description(self, data: Dict) -> str:
         """Extract product description using AI with all available context"""
         entity_name = data.get("entity_name", "the product")
         vendor_name = data.get("vendor_name", "the vendor")
@@ -117,7 +167,7 @@ class AISynthesizer:
             content += f"Terms of Service content:\n{tos.get('content', '')[:2000]}\n\n"
         
         # Use AI to generate description from available data
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 prompt = f"""You are a security analyst writing a CISO-ready brief. Write a concise 2-3 sentence description of what this software product DOES based on available information.
 
@@ -135,11 +185,10 @@ Rules:
 
 Write the description:"""
 
-                resp = self.model.generate_content(prompt)
-                result = resp.text.strip()
-                if result and len(result) > 20:  # Ensure we got a real response
+                result = await self._call_vertex_ai(prompt)
+                if result and len(result.strip()) > 20:  # Ensure we got a real response
                     print(f"[AI Synthesizer] ✓ Generated description using AI")
-                    return result
+                    return result.strip()
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating description with AI: {e}")
 
@@ -152,14 +201,14 @@ Write the description:"""
     # -------------------------------------------------------------------------
     # USAGE
     # -------------------------------------------------------------------------
-    def _extract_usage(self, data: Dict, category: SoftwareCategory) -> str:
+    async def _extract_usage(self, data: Dict, category: SoftwareCategory) -> str:
         """Extract usage information using AI"""
         entity_name = data.get("entity_name", "the product")
         vendor_name = data.get("vendor_name", "the vendor")
         vendor_page = data.get("vendor_page") or {}
         content = vendor_page.get("content", "") if vendor_page else ""
 
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 prompt = f"""You are a security analyst. Describe how this product is typically used, in 2-3 sentences.
 
@@ -178,11 +227,10 @@ Focus on:
 
 If information is limited, state that clearly. Write the usage description:"""
 
-                resp = self.model.generate_content(prompt)
-                result = resp.text.strip()
-                if result and len(result) > 20:
+                result = await self._call_vertex_ai(prompt)
+                if result and len(result.strip()) > 20:
                     print(f"[AI Synthesizer] ✓ Generated usage description using AI")
-                    return result
+                    return result.strip()
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating usage with AI: {e}")
 
@@ -196,7 +244,7 @@ If information is limited, state that clearly. Write the usage description:"""
     # -------------------------------------------------------------------------
     # VENDOR REPUTATION
     # -------------------------------------------------------------------------
-    def _extract_vendor_reputation(self, data: Dict) -> str:
+    async def _extract_vendor_reputation(self, data: Dict) -> str:
         """Extract vendor reputation using all available security signals"""
         entity_name = data.get("entity_name", "the product")
         vendor_name = data.get("vendor_name", "the vendor")
@@ -278,7 +326,7 @@ If information is limited, state that clearly. Write the usage description:"""
             if comments:
                 indicators.append(f"VirusTotal: {len(comments)} community comments available")
 
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 prompt = f"""You are a security analyst writing a CISO-ready brief. Summarize vendor security reputation in 2-3 sentences based ONLY on factual security indicators.
 
@@ -302,11 +350,10 @@ Rules:
 
 Write the vendor reputation summary:"""
 
-                resp = self.model.generate_content(prompt)
-                result = resp.text.strip()
-                if result and len(result) > 30:
+                result = await self._call_vertex_ai(prompt)
+                if result and len(result.strip()) > 30:
                     print(f"[AI Synthesizer] ✓ Generated vendor reputation using AI")
-                    return result
+                    return result.strip()
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating vendor reputation with AI: {e}")
 
@@ -347,7 +394,7 @@ Write the vendor reputation summary:"""
     # -------------------------------------------------------------------------
     # INCIDENTS
     # -------------------------------------------------------------------------
-    def _extract_incidents(self, data: Dict) -> str:
+    async def _extract_incidents(self, data: Dict) -> str:
         incidents = data.get("incidents") or []
         kev = data.get("cisa_kev") or []
         cves = data.get("cves") or {}
@@ -360,7 +407,7 @@ Write the vendor reputation summary:"""
         if cves and cves.get("critical_count", 0):
             context.append(f"{cves.get('critical_count')} critical CVEs")
 
-        if self.use_ai and self.model and context:
+        if self.use_ai and context:
             try:
                 prompt = f"""
 Write a **2–3 sentence** summary of security incidents & abuse signals.
@@ -372,10 +419,11 @@ Rules:
 - If findings are severe, state it clearly.
 - If limited, say visibility is limited.
 """
-                resp = self.model.generate_content(prompt)
-                return resp.text.strip()
-            except Exception:
-                pass
+                result = await self._call_vertex_ai(prompt)
+                if result:
+                    return result.strip()
+            except Exception as e:
+                print(f"[AI Synthesizer] ⚠ Error generating incidents summary: {e}")
 
         if incidents:
             return f"{len(incidents)} documented security incidents."
@@ -387,7 +435,7 @@ Rules:
     # -------------------------------------------------------------------------
     # DATA HANDLING
     # -------------------------------------------------------------------------
-    def _extract_data_handling(self, data: Dict) -> str:
+    async def _extract_data_handling(self, data: Dict) -> str:
         """Extract data handling and compliance information"""
         entity_name = data.get("entity_name", "the product")
         tos = data.get("terms_of_service") or {}
@@ -399,7 +447,7 @@ Rules:
         if vendor and vendor.get("content"):
             content += f"Vendor Security Page:\n{vendor['content'][:3000]}"
 
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 prompt = f"""You are a security analyst. Extract data-handling & compliance information in 2-3 sentences.
 
@@ -426,11 +474,10 @@ Rules:
 
 Write the data handling summary:"""
 
-                resp = self.model.generate_content(prompt)
-                result = resp.text.strip()
-                if result and len(result) > 30:
+                result = await self._call_vertex_ai(prompt)
+                if result and len(result.strip()) > 30:
                     print(f"[AI Synthesizer] ✓ Generated data handling info using AI")
-                    return result
+                    return result.strip()
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating data handling with AI: {e}")
 
@@ -460,11 +507,11 @@ Write the data handling summary:"""
     # -------------------------------------------------------------------------
     # DEPLOYMENT CONTROLS
     # -------------------------------------------------------------------------
-    def _extract_deployment_controls(self, data: Dict) -> str:
+    async def _extract_deployment_controls(self, data: Dict) -> str:
         page = data.get("vendor_page") or {}
         content = page.get("content") if page else None
 
-        if self.use_ai and self.model and content:
+        if self.use_ai and content:
             try:
                 prompt = f"""
 Extract deployment/admin controls in 2–3 sentences.
@@ -478,10 +525,11 @@ Look for:
 Vendor text:
 {content[:4000]}
 """
-                resp = self.model.generate_content(prompt)
-                return resp.text.strip()
-            except Exception:
-                pass
+                result = await self._call_vertex_ai(prompt)
+                if result:
+                    return result.strip()
+            except Exception as e:
+                print(f"[AI Synthesizer] ⚠ Error generating deployment controls: {e}")
 
         if not content:
             return "No deployment-control information found."
@@ -618,7 +666,7 @@ Vendor text:
 
         return cites
 
-    def _generate_security_posture_summary(
+    async def _generate_security_posture_summary(
         self,
         entity_name: str,
         vendor_name: str,
@@ -632,7 +680,7 @@ Vendor text:
         deployment_controls: str
     ) -> str:
         """Generate a short AI summary of the security posture"""
-        if not self.use_ai or not self.model:
+        if not self.use_ai:
             # Fallback to a simple summary
             cve_info = f"{cve_summary.total_cves} CVEs" if cve_summary.total_cves > 0 else "no known CVEs"
             kev_info = f", {cve_summary.cisa_kev_count} in CISA KEV" if cve_summary.cisa_kev_count > 0 else ""
@@ -658,21 +706,23 @@ Write a brief, executive-level summary that captures the overall security postur
 
 Respond with ONLY the summary text, no labels or prefixes."""
 
-            response = self.model.generate_content(prompt)
-            summary = response.text.strip()
-            # Clean up any extra formatting
-            summary = summary.replace('**', '').replace('*', '').strip()
-            # Limit to 250 characters as a safety measure
-            if len(summary) > 250:
-                summary = summary[:247] + "..."
-            print(f"[AI Synthesizer] ✓ Generated security posture summary: {summary[:100]}...")
-            return summary
+            summary = await self._call_vertex_ai(prompt)
+            if summary:
+                summary = summary.strip()
+                # Clean up any extra formatting
+                summary = summary.replace('**', '').replace('*', '').strip()
+                # Limit to 250 characters as a safety measure
+                if len(summary) > 250:
+                    summary = summary[:247] + "..."
+                print(f"[AI Synthesizer] ✓ Generated security posture summary: {summary[:100]}...")
+                return summary
         except Exception as e:
             print(f"[AI Synthesizer] ✗ Error generating summary: {e}, using fallback")
-            # Fallback summary
-            cve_info = f"{cve_summary.total_cves} CVEs" if cve_summary.total_cves > 0 else "no known CVEs"
-            kev_info = f", {cve_summary.cisa_kev_count} in CISA KEV" if cve_summary.cisa_kev_count > 0 else ""
-            return f"{entity_name} by {vendor_name} ({category.value}) has {cve_info}{kev_info}. {vendor_reputation[:100]}..."
+        
+        # Fallback summary
+        cve_info = f"{cve_summary.total_cves} CVEs" if cve_summary.total_cves > 0 else "no known CVEs"
+        kev_info = f", {cve_summary.cisa_kev_count} in CISA KEV" if cve_summary.cisa_kev_count > 0 else ""
+        return f"{entity_name} by {vendor_name} ({category.value}) has {cve_info}{kev_info}. {vendor_reputation[:100]}..."
 
 
     # -------------------------------------------------------------------------
@@ -1095,7 +1145,7 @@ Respond with ONLY the summary text, no labels or prefixes."""
         
         concerns_text = "; ".join(security_concerns) if security_concerns else "General security concerns identified"
         
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 prompt = f"""You are a security analyst helping a CISO find safer alternatives to a software product.
 
@@ -1146,8 +1196,9 @@ Important:
 - Only suggest well-known, established products
 - Ensure alternatives are actually in the same category: {category.value}"""
                 
-                resp = self.model.generate_content(prompt)
-                t = resp.text.strip()
+                t = await self._call_vertex_ai(prompt)
+                if not t:
+                    raise Exception("Empty response from Vertex AI")
                 
                 # Clean up the response - remove markdown code blocks if present
                 t = re.sub(r'```json\s*', '', t)
@@ -1316,7 +1367,7 @@ Important:
         collected_data: Dict[str, Any]
     ) -> str:
         """Generate AI suggestion on whether to use this application on a company laptop"""
-        if self.use_ai and self.model:
+        if self.use_ai:
             try:
                 # Build comprehensive data summary for the AI
                 data_summary = []
@@ -1433,11 +1484,10 @@ Collected Data:
 
 Write your recommendation:"""
 
-                resp = self.model.generate_content(prompt)
-                result = resp.text.strip()
-                if result and len(result) > 50:  # Ensure we got a substantial response
+                result = await self._call_vertex_ai(prompt)
+                if result and len(result.strip()) > 50:  # Ensure we got a substantial response
                     print(f"[AI Synthesizer] ✓ Generated suggestion using AI")
-                    return result
+                    return result.strip()
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating suggestion with AI: {e}")
         
