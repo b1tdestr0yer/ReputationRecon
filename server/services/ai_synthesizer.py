@@ -1048,57 +1048,257 @@ Respond with ONLY the summary text, no labels or prefixes."""
     # -------------------------------------------------------------------------
     # ALTERNATIVES
     # -------------------------------------------------------------------------
-    async def suggest_alternatives(self, category: SoftwareCategory, entity_name: str) -> List[Alternative]:
+    async def suggest_alternatives(
+        self, 
+        category: SoftwareCategory, 
+        entity_name: str,
+        vendor_name: str,
+        trust_score: TrustScore,
+        security_posture: SecurityPosture,
+        collected_data: Dict
+    ) -> List[Alternative]:
+        """
+        Suggest safer alternatives only if trust score is below threshold (under 80 or not Low risk).
+        Uses Gemini to generate context-aware suggestions based on app type and security issues found.
+        """
+        # Only suggest alternatives if trust score is low (under 80 or Medium/High/Critical risk)
+        score = trust_score.score
+        risk_level = trust_score.risk_level
+        
+        # Threshold: suggest if score < 80 OR risk level is not "Low"
+        should_suggest = score < 80 or risk_level != "Low"
+        
+        if not should_suggest:
+            print(f"[AI Synthesizer] Trust score {score}/100 ({risk_level} risk) is acceptable, skipping alternatives")
+            return []
+        
+        print(f"[AI Synthesizer] Trust score {score}/100 ({risk_level} risk) is low, suggesting alternatives...")
+        
+        # Gather context about the application and its security issues
+        description = security_posture.description[:200] if security_posture.description else "N/A"
+        usage = security_posture.usage[:200] if security_posture.usage else "N/A"
+        
+        # Identify key security concerns
+        cve = security_posture.cve_summary
+        security_concerns = []
+        if cve.total_cves > 0:
+            security_concerns.append(f"{cve.total_cves} CVEs found ({cve.critical_count} critical, {cve.high_count} high)")
+        if cve.cisa_kev_count > 0:
+            security_concerns.append(f"{cve.cisa_kev_count} CISA KEV entries (actively exploited)")
+        
+        vt = collected_data.get("virustotal")
+        if vt and vt.get("response_code") == 1:
+            positives = vt.get("positives", 0)
+            total = vt.get("total", 0)
+            if positives > 0:
+                security_concerns.append(f"VirusTotal: {positives}/{total} engines flagged")
+        
+        concerns_text = "; ".join(security_concerns) if security_concerns else "General security concerns identified"
+        
         if self.use_ai and self.model:
             try:
-                prompt = f"""
-Suggest **1–2 reputable alternatives** for:
+                prompt = f"""You are a security analyst helping a CISO find safer alternatives to a software product.
 
-Category: {category.value}
-Product: {entity_name}
+Current Product Assessment:
+- Product Name: {entity_name}
+- Vendor: {vendor_name}
+- Category: {category.value}
+- Trust Score: {score}/100 ({risk_level} risk)
+- Description: {description}
+- Primary Usage: {usage}
+- Security Concerns: {concerns_text}
 
-Return JSON with:
-- name
-- vendor
-- rationale (security focused)
-- trust_score (0-100)
-"""
+Task: Suggest 2-3 reputable, security-focused alternatives that:
+1. Serve the same or similar purpose (same category: {category.value})
+2. Have better security posture than the current product
+3. Are well-established and trusted in the industry
+4. Address the specific security concerns identified
+
+For each alternative, provide:
+- name: The product name
+- vendor: The vendor/company name
+- rationale: A brief 1-2 sentence explanation of why this is a safer alternative, focusing on security benefits
+- trust_score: An estimated trust score (0-100) - be realistic, typically 75-90 for good alternatives
+
+Return ONLY valid JSON in this exact format (no markdown, no code blocks):
+{{
+  "alternatives": [
+    {{
+      "name": "Product Name",
+      "vendor": "Vendor Name",
+      "rationale": "Why this is safer (1-2 sentences focusing on security)",
+      "trust_score": 85
+    }},
+    {{
+      "name": "Product Name 2",
+      "vendor": "Vendor Name 2",
+      "rationale": "Why this is safer (1-2 sentences focusing on security)",
+      "trust_score": 82
+    }}
+  ]
+}}
+
+Important:
+- Return 2-3 alternatives (not more, not less)
+- Focus on security benefits in rationale
+- Be specific about what makes them safer
+- Trust scores should be realistic (typically 75-90 for good alternatives)
+- Only suggest well-known, established products
+- Ensure alternatives are actually in the same category: {category.value}"""
+                
                 resp = self.model.generate_content(prompt)
-                t = resp.text
-
+                t = resp.text.strip()
+                
+                # Clean up the response - remove markdown code blocks if present
+                t = re.sub(r'```json\s*', '', t)
+                t = re.sub(r'```\s*', '', t)
+                t = t.strip()
+                
                 # Extract JSON
-                m = re.search(r"\{.*\}", t, re.DOTALL)
+                m = re.search(r'\{[^{}]*"alternatives"\s*:\s*\[.*?\]\s*\}', t, re.DOTALL)
+                if not m:
+                    # Try broader pattern
+                    m = re.search(r'\{.*"alternatives".*\}', t, re.DOTALL)
+                
                 if m:
-                    data = json.loads(m.group(0))
+                    json_str = m.group(0)
+                    data = json.loads(json_str)
                     out = []
-                    for alt in data.get("alternatives", [])[:2]:
-                        out.append(Alternative(
-                            name=alt.get("name", "Unknown"),
-                            vendor=alt.get("vendor", "Unknown"),
-                            rationale=alt.get("rationale", ""),
-                            trust_score=alt.get("trust_score", 60)
-                        ))
-                    return out
-            except Exception:
-                pass
+                    
+                    alternatives_list = data.get("alternatives", [])
+                    if not isinstance(alternatives_list, list):
+                        alternatives_list = []
+                    
+                    for alt in alternatives_list[:3]:  # Take up to 3
+                        if not isinstance(alt, dict):
+                            continue
+                            
+                        name = alt.get("name", "").strip()
+                        vendor = alt.get("vendor", "").strip()
+                        rationale = alt.get("rationale", "").strip()
+                        trust_score_alt = alt.get("trust_score", 75)
+                        
+                        # Validate and clamp trust_score
+                        try:
+                            trust_score_alt = int(trust_score_alt)
+                            trust_score_alt = max(0, min(100, trust_score_alt))
+                        except (ValueError, TypeError):
+                            trust_score_alt = 75
+                        
+                        if name and vendor and rationale:
+                            out.append(Alternative(
+                                name=name,
+                                vendor=vendor,
+                                rationale=rationale,
+                                trust_score=trust_score_alt
+                            ))
+                    
+                    if out:
+                        print(f"[AI Synthesizer] ✓ Generated {len(out)} alternatives using AI")
+                        return out
+                    else:
+                        print(f"[AI Synthesizer] ⚠ AI returned alternatives but none were valid, using fallback")
+                else:
+                    print(f"[AI Synthesizer] ⚠ Could not parse JSON from AI response, using fallback")
+                    print(f"[AI Synthesizer] Response preview: {t[:200]}")
+                    
+            except json.JSONDecodeError as e:
+                print(f"[AI Synthesizer] ⚠ JSON decode error: {e}, using fallback")
+            except Exception as e:
+                print(f"[AI Synthesizer] ⚠ Error generating alternatives with AI: {e}, using fallback")
+                import traceback
+                traceback.print_exc()
 
-        # fallback
+        # Fallback: category-based defaults (only if AI failed)
+        print(f"[AI Synthesizer] Using fallback alternatives for category: {category.value}")
         defaults = {
             SoftwareCategory.FILE_SHARING: [
                 Alternative(
                     name="Nextcloud",
                     vendor="Nextcloud GmbH",
-                    rationale="Open-source, self-hosted, strong security posture.",
+                    rationale="Open-source, self-hosted solution with strong security posture, GDPR compliant, and full data control.",
                     trust_score=85
+                ),
+                Alternative(
+                    name="Seafile",
+                    vendor="Seafile Ltd",
+                    rationale="Open-source file sync and sharing with end-to-end encryption and self-hosting options.",
+                    trust_score=80
                 )
             ],
             SoftwareCategory.COLLABORATION: [
                 Alternative(
                     name="Element",
                     vendor="Element",
-                    rationale="E2EE, open-source, can be self-hosted.",
+                    rationale="End-to-end encrypted, open-source collaboration platform based on Matrix protocol. Can be self-hosted.",
+                    trust_score=82
+                ),
+                Alternative(
+                    name="Mattermost",
+                    vendor="Mattermost Inc",
+                    rationale="Open-source, self-hostable team collaboration with enterprise security features and compliance certifications.",
+                    trust_score=80
+                )
+            ],
+            SoftwareCategory.COMMUNICATION: [
+                Alternative(
+                    name="Signal",
+                    vendor="Signal Foundation",
+                    rationale="End-to-end encrypted messaging with open-source client, minimal metadata collection, and strong privacy focus.",
+                    trust_score=88
+                ),
+                Alternative(
+                    name="Element",
+                    vendor="Element",
+                    rationale="E2EE messaging based on Matrix protocol, open-source, and supports self-hosting for complete control.",
+                    trust_score=82
+                )
+            ],
+            SoftwareCategory.CLOUD_STORAGE: [
+                Alternative(
+                    name="Nextcloud",
+                    vendor="Nextcloud GmbH",
+                    rationale="Self-hosted cloud storage with strong security, GDPR compliance, and full data sovereignty.",
+                    trust_score=85
+                ),
+                Alternative(
+                    name="Tresorit",
+                    vendor="Tresorit",
+                    rationale="Zero-knowledge encrypted cloud storage with end-to-end encryption and strong security certifications.",
+                    trust_score=83
+                )
+            ],
+            SoftwareCategory.SECURITY_TOOL: [
+                Alternative(
+                    name="Wazuh",
+                    vendor="Wazuh Inc",
+                    rationale="Open-source security monitoring platform with active threat detection and compliance management.",
+                    trust_score=82
+                )
+            ],
+            SoftwareCategory.DEVELOPMENT: [
+                Alternative(
+                    name="GitLab",
+                    vendor="GitLab Inc",
+                    rationale="Open-source DevOps platform with self-hosting options, strong security features, and compliance certifications.",
+                    trust_score=83
+                ),
+                Alternative(
+                    name="Gitea",
+                    vendor="Gitea",
+                    rationale="Lightweight, self-hosted Git service with minimal resource requirements and strong security focus.",
                     trust_score=80
                 )
             ]
         }
-        return defaults.get(category, [])
+        
+        fallback_alternatives = defaults.get(category, [
+            Alternative(
+                name="Consider open-source alternatives",
+                vendor="Various",
+                rationale="For better security transparency and control, consider evaluating open-source alternatives in this category that allow self-hosting and security audits.",
+                trust_score=75
+            )
+        ])
+        
+        return fallback_alternatives[:2]  # Return max 2 from fallback
