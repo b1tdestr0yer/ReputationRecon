@@ -688,6 +688,59 @@ Respond with ONLY the summary text, no labels or prefixes."""
 
         cve = security_posture.cve_summary
         vt = collected_data.get("virustotal")
+        
+        # Well-known, established companies that should get more lenient scoring
+        # These are major tech companies with established security practices
+        well_known_vendors = {
+            "discord", "discord inc", "discordapp",
+            "microsoft", "microsoft corporation",
+            "google", "alphabet", "google llc",
+            "apple", "apple inc",
+            "salesforce", "salesforce.com",
+            "adobe", "adobe inc", "adobe systems",
+            "oracle", "oracle corporation",
+            "ibm", "international business machines",
+            "amazon", "amazon web services", "aws",
+            "meta", "facebook", "meta platforms",
+            "slack", "slack technologies",
+            "zoom", "zoom video communications",
+            "dropbox", "dropbox inc",
+            "atlassian", "atlassian corporation",
+            "github", "github inc", "microsoft github",
+            "gitlab", "gitlab inc",
+            "red hat", "redhat",
+            "canonical", "ubuntu",
+            "docker", "docker inc",
+            "vmware", "vmware inc",
+            "cisco", "cisco systems",
+            "palo alto", "palo alto networks",
+            "crowdstrike", "crowdstrike inc",
+            "splunk", "splunk inc",
+            "okta", "okta inc",
+            "auth0",
+            "twilio", "twilio inc",
+            "stripe", "stripe inc",
+            "paypal", "paypal holdings",
+            "intel", "intel corporation",
+            "nvidia", "nvidia corporation",
+            "amd", "advanced micro devices"
+        }
+        
+        # Check if vendor is well-known
+        vendor_name = collected_data.get("vendor_name", "").lower().strip()
+        entity_name = collected_data.get("entity_name", "").lower().strip()
+        is_well_known = (
+            vendor_name in well_known_vendors or
+            entity_name in well_known_vendors or
+            any(vendor in vendor_name or vendor in entity_name for vendor in well_known_vendors if len(vendor) > 5)
+        )
+        
+        # Also check vendor reputation text for established/reputable indicators
+        vendor_reputation_lower = security_posture.vendor_reputation.lower()
+        is_established = any(term in vendor_reputation_lower for term in [
+            "established", "reputable", "major", "leading", "well-known",
+            "trusted", "recognized", "prominent", "large-scale", "enterprise"
+        ])
 
         # Version-specific CVEs are weighted more heavily (more relevant to current version)
         if cve.detected_version and cve.version_specific_cves > 0:
@@ -869,6 +922,50 @@ Respond with ONLY the summary text, no labels or prefixes."""
         if "insufficient" not in security_posture.deployment_controls.lower() and len(security_posture.deployment_controls) > 50:
             score += 5
             factors["deployment_controls"] = +5
+
+        # Well-known/established company bonus (more lenient scoring)
+        # Apply this after calculating penalties but before final clamping
+        if is_well_known or is_established:
+            # Calculate how much we need to boost to get to a reasonable level
+            # For well-known companies, we want them to score at least 75-85 if they're generally clean
+            # But we don't want to completely ignore security issues
+            
+            # Only apply bonus if there are no serious red flags
+            has_serious_issues = (
+                cve.cisa_kev_count > 0 or  # CISA KEV is always serious
+                (cve.version_specific_critical > 5) or  # Many critical CVEs
+                (vt and vt.get("response_code") == 1 and 
+                 vt.get("positives", 0) > 0 and 
+                 (vt.get("positives", 0) / max(vt.get("total", 1), 1)) > 0.1)  # High VirusTotal flags
+            )
+            
+            if not has_serious_issues:
+                # Apply a boost, but scale it based on current score
+                # If score is already decent (60+), give a bigger boost
+                # If score is low due to minor issues, give a moderate boost
+                if score >= 60:
+                    # Already decent, boost to 80-85 range
+                    boost = min(20, 85 - score)
+                    score += boost
+                    factors["established_vendor_bonus"] = +boost
+                elif score >= 50:
+                    # Moderate issues, boost to 70-75 range
+                    boost = min(20, 75 - score)
+                    score += boost
+                    factors["established_vendor_bonus"] = +boost
+                else:
+                    # More significant issues, but still give some benefit
+                    boost = min(10, 65 - score)
+                    if boost > 0:
+                        score += boost
+                        factors["established_vendor_bonus"] = +boost
+            else:
+                # Has serious issues, but still give a small benefit for transparency
+                if score < 70:
+                    boost = min(5, 70 - score)
+                    if boost > 0:
+                        score += boost
+                        factors["established_vendor_partial_bonus"] = +boost
 
         # Clamp score
         score = max(0, min(100, score))

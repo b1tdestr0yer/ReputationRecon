@@ -930,7 +930,7 @@
             }
             
             // Vendor reputation and trust signals
-            const vendorReputation = data.security_posture?.vendor_reputation || '';
+            let vendorReputation = data.security_posture?.vendor_reputation || '';
             const incidentsAbuse = data.security_posture?.incidents_abuse || '';
             
             // Check for negative signals in vendor reputation
@@ -981,9 +981,84 @@
             aiScanScore = Math.max(0, Math.min(100, aiScanScore));
             
             // Vendor Trust Score (0-100, based on trust score factors and vendor reputation)
-            // Use trust_score itself as a measure, or factors if available
+            // Use trust_score itself as a measure, but apply well-known vendor bonus
             let vendorTrustScore = data.trust_score?.score || 50;
-            // If we have factors, we could weight them, but for now use the overall score
+            
+            // Well-known, established companies should get more lenient scoring
+            const wellKnownVendors = [
+                "discord", "discord inc", "discordapp",
+                "microsoft", "microsoft corporation",
+                "google", "alphabet", "google llc",
+                "apple", "apple inc",
+                "salesforce", "salesforce.com",
+                "adobe", "adobe inc", "adobe systems",
+                "oracle", "oracle corporation",
+                "ibm", "international business machines",
+                "amazon", "amazon web services", "aws",
+                "meta", "facebook", "meta platforms",
+                "slack", "slack technologies",
+                "zoom", "zoom video communications",
+                "dropbox", "dropbox inc",
+                "atlassian", "atlassian corporation",
+                "github", "github inc", "microsoft github",
+                "gitlab", "gitlab inc",
+                "red hat", "redhat",
+                "canonical", "ubuntu",
+                "docker", "docker inc",
+                "vmware", "vmware inc",
+                "cisco", "cisco systems",
+                "palo alto", "palo alto networks",
+                "crowdstrike", "crowdstrike inc",
+                "splunk", "splunk inc",
+                "okta", "okta inc",
+                "auth0",
+                "twilio", "twilio inc",
+                "stripe", "stripe inc",
+                "paypal", "paypal holdings",
+                "intel", "intel corporation",
+                "nvidia", "nvidia corporation",
+                "amd", "advanced micro devices"
+            ];
+            
+            const vendorName = (data.vendor_name || "").toLowerCase().trim();
+            const entityName = (data.entity_name || "").toLowerCase().trim();
+            const isWellKnown = wellKnownVendors.some(vendor => 
+                vendorName.includes(vendor) || entityName.includes(vendor)
+            );
+            
+            // Check vendor reputation for established indicators (reuse vendorReputation from above)
+            const vendorReputationLower = (data.security_posture?.vendor_reputation || "").toLowerCase();
+            const isEstablished = [
+                "established", "reputable", "major", "leading", "well-known",
+                "trusted", "recognized", "prominent", "large-scale", "enterprise"
+            ].some(term => vendorReputationLower.includes(term));
+            
+            // Apply bonus for well-known/established vendors (same logic as backend)
+            if ((isWellKnown || isEstablished) && vendorTrustScore < 85) {
+                // Check for serious issues
+                const cveSummary = data.security_posture?.cve_summary || {};
+                const hasSeriousIssues = (
+                    (cveSummary.cisa_kev_count || 0) > 0 ||
+                    (cveSummary.version_specific_critical || 0) > 5
+                );
+                
+                if (!hasSeriousIssues) {
+                    // Apply boost similar to backend logic
+                    if (vendorTrustScore >= 60) {
+                        // Boost to 80-85 range
+                        vendorTrustScore = Math.min(85, vendorTrustScore + Math.min(20, 85 - vendorTrustScore));
+                    } else if (vendorTrustScore >= 50) {
+                        // Boost to 70-75 range
+                        vendorTrustScore = Math.min(75, vendorTrustScore + Math.min(20, 75 - vendorTrustScore));
+                    } else {
+                        // Smaller boost for lower scores
+                        vendorTrustScore = Math.min(65, vendorTrustScore + 10);
+                    }
+                } else if (vendorTrustScore < 70) {
+                    // Has serious issues but still give small benefit
+                    vendorTrustScore = Math.min(70, vendorTrustScore + 5);
+                }
+            }
             
             // Information Quantity Score (0-100, based on number of citations and data quality)
             // Reuse citationsCount and dataQuality from above
