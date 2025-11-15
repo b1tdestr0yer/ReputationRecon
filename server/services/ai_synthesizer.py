@@ -257,7 +257,11 @@ Write the vendor reputation summary:"""
         cves = data.get("cves") or {}
         kev = data.get("cisa_kev") or []
         hashlookup = data.get("hashlookup") or {}
+        # Get version from hashlookup (which may have been updated with vendor page version)
         detected_version = hashlookup.get("product_version") if hashlookup else None
+        version_source = hashlookup.get("version_source", "unknown") if hashlookup else "unknown"
+        if detected_version:
+            print(f"[AI Synthesizer] Using version {detected_version} (source: {version_source})")
         
         return CVESummary(
             total_cves=cves.get("total_cves", 0) if cves else 0,
@@ -515,7 +519,7 @@ Vendor text:
             
             cites.append(Citation(
                 source=vt_url,
-                source_type="independent",
+                source_type="VirusTotal",
                 claim=f"VirusTotal file analysis: {positives}/{total} vendors flagged",
                 is_vendor_stated=False,
                 timestamp=datetime.now()

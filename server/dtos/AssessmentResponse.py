@@ -16,6 +16,14 @@ class SoftwareCategory(str, Enum):
     CLOUD_STORAGE = "Cloud Storage"
     COMMUNICATION = "Communication"
     PROJECT_MANAGEMENT = "Project Management"
+    GAMES = "Games"
+    DEFAULT_WINDOWS_APP = "Default Windows App"
+    BROWSER = "Browser"
+    MEDIA_PLAYER = "Media Player"
+    OFFICE_SUITE = "Office Suite"
+    SYSTEM_UTILITY = "System Utility"
+    NETWORKING = "Networking"
+    DATABASE = "Database"
     OTHER = "Other"
 
 

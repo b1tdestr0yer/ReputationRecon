@@ -49,7 +49,7 @@ class AssessmentService:
         else:
             print("[Assessment Service] No cache entry found")
         
-        # Step 1: Resolve entity and vendor
+        # Step 1: Resolve entity and vendor (including URL via Gemini if not provided)
         print("\n[Assessment Service] Step 1: Resolving entity and vendor...")
         resolved = await self.entity_resolver.resolve(
             product_name=request.product_name,
@@ -59,7 +59,12 @@ class AssessmentService:
         
         entity_name = resolved["entity_name"]
         vendor_name = resolved["vendor_name"]
-        resolved_url = resolved["resolved_url"]
+        resolved_url = resolved["resolved_url"]  # This may be Gemini-resolved if not provided
+        print(f"[Assessment Service] ✓ Resolved: {entity_name} by {vendor_name}")
+        if resolved_url:
+            print(f"  → URL: {resolved_url}")
+        else:
+            print(f"  → No URL available (neither provided nor resolved)")
         
         # Step 2: Classify software
         print(f"\n[Assessment Service] Step 2: Classifying software...")
@@ -182,17 +187,11 @@ class AssessmentService:
         print(f"  → Queueing CISA KEV lookup...")
         tasks.append(self.cve_collector.get_cisa_kev(entity_name))
         
-        # Vendor pages - try to find even without explicit URL
+        # Vendor pages - use resolved URL (which may have been resolved by Gemini)
         async def noop():
             return None
         
-        vendor_url = url
-        if not vendor_url and vendor_name and vendor_name.lower() not in ["unknown vendor", "unknown"]:
-            # Try to construct a URL from vendor name
-            vendor_domain = vendor_name.lower().replace(" ", "").replace(".", "")
-            vendor_url = f"https://{vendor_domain}.com"
-            print(f"  → Attempting to find vendor pages using constructed URL: {vendor_url}")
-        
+        vendor_url = url  # This is the resolved_url from EntityResolver, which may be Gemini-resolved
         if vendor_url:
             print(f"  → Queueing vendor page fetch...")
             tasks.append(self.vendor_collector.fetch_security_page(vendor_url))
@@ -237,18 +236,53 @@ class AssessmentService:
         hashlookup_info = results[5] if not isinstance(results[5], Exception) else None
         incidents = results[6] if not isinstance(results[6], Exception) else []
         
-        # If hashlookup found version info, search for version-specific CVEs
+        # Extract latest version from vendor page if available (prefer this as it's the "latest" version)
         product_version = None
+        version_source = None
+        
+        # First, try to get version from hashlookup
         if hashlookup_info and hashlookup_info.get("found"):
             product_version = hashlookup_info.get("product_version")
             if product_version:
                 print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
-                print(f"[Assessment Service] Searching for version-specific CVEs...")
-                version_cve_data = await self.cve_collector.search_cves(
-                    entity_name, vendor_name, product_version
-                )
-                # Merge version-specific data into CVE results
-                cve_data.update(version_cve_data)
+                version_source = "hashlookup"
+        
+        # Then, try to get latest version from vendor page (this takes precedence as it's the "latest")
+        if vendor_page and vendor_page.get("content") and vendor_page.get("url"):
+            print(f"[Assessment Service] Attempting to extract latest version from vendor page...")
+            latest_version = await self.vendor_collector.extract_latest_version(
+                vendor_page.get("content", ""),
+                entity_name,
+                vendor_name,
+                vendor_page.get("url", "")
+            )
+            if latest_version:
+                print(f"[Assessment Service] ✓ Extracted latest version from vendor page: {latest_version}")
+                product_version = latest_version  # Prefer vendor page version as it's the "latest"
+                version_source = "vendor_page"
+            else:
+                print(f"[Assessment Service] Could not extract version from vendor page")
+        
+        # If we have a version (from hashlookup or vendor page), search for version-specific CVEs
+        if product_version:
+            print(f"[Assessment Service] Searching for version-specific CVEs for version: {product_version}...")
+            version_cve_data = await self.cve_collector.search_cves(
+                entity_name, vendor_name, product_version
+            )
+            # Merge version-specific data into CVE results
+            cve_data.update(version_cve_data)
+        
+        # Update hashlookup_info with the version we're using (vendor page version takes precedence)
+        if product_version and hashlookup_info:
+            hashlookup_info["product_version"] = product_version
+            hashlookup_info["version_source"] = version_source or "unknown"
+        elif product_version and not hashlookup_info:
+            # Create hashlookup_info dict if it doesn't exist but we have a version
+            hashlookup_info = {
+                "found": True,
+                "product_version": product_version,
+                "version_source": version_source or "vendor_page"
+            }
         
         return {
             "cves": cve_data,

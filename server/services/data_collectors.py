@@ -5,6 +5,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
+import google.generativeai as genai
+import json
 
 # Load environment variables
 load_dotenv()
@@ -222,6 +224,113 @@ class CVECollector(DataCollector):
 class VendorPageCollector(DataCollector):
     """Collect data from vendor security pages"""
     
+    def __init__(self):
+        """Initialize VendorPageCollector with optional Gemini AI support"""
+        super().__init__()
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                # Try gemini-2.5-flash first, fallback to gemini-2.5-pro
+                try:
+                    self.model = genai.GenerativeModel('gemini-2.5-flash')
+                    self.use_ai = True
+                    print("[Vendor Collector] ✓ Google Gemini configured for version extraction (using gemini-2.5-flash)")
+                except Exception as e:
+                    print(f"[Vendor Collector] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
+                    try:
+                        self.model = genai.GenerativeModel('gemini-2.5-pro')
+                        self.use_ai = True
+                        print("[Vendor Collector] ✓ Google Gemini configured (using gemini-2.5-pro)")
+                    except Exception as e2:
+                        print(f"[Vendor Collector] ✗ Error initializing Gemini models: {e2}, using fallback")
+                        self.model = None
+                        self.use_ai = False
+            except Exception as e:
+                print(f"[Vendor Collector] ✗ Error configuring Gemini: {e}, using fallback")
+                self.model = None
+                self.use_ai = False
+        else:
+            self.model = None
+            self.use_ai = False
+    
+    async def extract_latest_version(self, vendor_page_content: str, product_name: str, vendor_name: str, vendor_url: str) -> Optional[str]:
+        """Extract the latest version of the software from vendor page content using Gemini"""
+        if not self.use_ai or not self.model:
+            print("[Vendor Collector] Gemini not available, skipping AI-based version extraction")
+            return None
+        
+        if not vendor_page_content or not product_name:
+            print("[Vendor Collector] Insufficient data for version extraction")
+            return None
+        
+        try:
+            print(f"[Vendor Collector] Using Gemini to extract latest version for: {product_name} by {vendor_name}")
+            # Clean HTML content - remove script and style tags
+            import re
+            cleaned_content = re.sub(r'<script[^>]*>.*?</script>', '', vendor_page_content, flags=re.DOTALL | re.IGNORECASE)
+            cleaned_content = re.sub(r'<style[^>]*>.*?</style>', '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
+            # Remove HTML tags but keep text
+            cleaned_content = re.sub(r'<[^>]+>', ' ', cleaned_content)
+            # Clean up whitespace
+            cleaned_content = ' '.join(cleaned_content.split())
+            # Limit content length for API
+            cleaned_content = cleaned_content[:15000]  # Limit to 15k chars
+            
+            prompt = f"""Analyze the following vendor page content and extract the latest/current version number for the software product.
+
+Product Name: {product_name}
+Vendor Name: {vendor_name}
+Vendor URL: {vendor_url}
+
+Page Content (first 15000 characters):
+{cleaned_content}
+
+Please identify the latest/current version number of {product_name}. Look for:
+- Version numbers (e.g., 1.2.3, 2.0, v3.1.4, 2024.1)
+- Release announcements mentioning "latest version" or "current version"
+- Download pages showing version numbers
+- Release notes or changelog entries
+
+Return ONLY the version number in JSON format:
+{{"version": "1.2.3"}}
+
+If you cannot find a clear version number, return:
+{{"version": null}}
+
+Respond with ONLY valid JSON, no additional text or explanation."""
+
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Try to extract JSON from response
+            # Remove markdown code blocks if present
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                result = json.loads(response_text)
+                version = result.get("version")
+                if version and version.lower() not in ["null", "none", "unknown", ""]:
+                    # Clean up version string (remove "v" prefix, extra spaces, etc.)
+                    version = version.strip().lstrip("vV").strip()
+                    print(f"[Vendor Collector] ✓ Gemini extracted latest version: {version}")
+                    return version
+                else:
+                    print(f"[Vendor Collector] ✗ Gemini could not find version information")
+                    return None
+            except json.JSONDecodeError as e:
+                print(f"[Vendor Collector] ✗ Failed to parse Gemini JSON response: {e}")
+                print(f"[Vendor Collector] Response was: {response_text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"[Vendor Collector] ✗ Error using Gemini for version extraction: {e}")
+            return None
+    
     async def fetch_security_page(self, vendor_url: str) -> Optional[Dict]:
         """Try to find and fetch vendor security/PSIRT page"""
         print(f"[Vendor Collector] Searching for security page at: {vendor_url}")
@@ -432,19 +541,110 @@ class WebSearchCollector(DataCollector):
 class EntityResolver:
     """Resolve entity and vendor identity from input"""
     
+    def __init__(self):
+        """Initialize EntityResolver with optional Gemini AI support"""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                # Try gemini-2.5-flash first, fallback to gemini-2.5-pro
+                try:
+                    self.model = genai.GenerativeModel('gemini-2.5-flash')
+                    self.use_ai = True
+                    print("[Entity Resolver] ✓ Google Gemini configured for URL resolution (using gemini-2.5-flash)")
+                except Exception as e:
+                    print(f"[Entity Resolver] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
+                    try:
+                        self.model = genai.GenerativeModel('gemini-2.5-pro')
+                        self.use_ai = True
+                        print("[Entity Resolver] ✓ Google Gemini configured (using gemini-2.5-pro)")
+                    except Exception as e2:
+                        print(f"[Entity Resolver] ✗ Error initializing Gemini models: {e2}, using fallback")
+                        self.model = None
+                        self.use_ai = False
+            except Exception as e:
+                print(f"[Entity Resolver] ✗ Error configuring Gemini: {e}, using fallback")
+                self.model = None
+                self.use_ai = False
+        else:
+            self.model = None
+            self.use_ai = False
+    
+    async def resolve_vendor_url_with_gemini(self, product_name: Optional[str], vendor_name: Optional[str]) -> Optional[str]:
+        """Use Gemini AI to resolve the vendor's official website URL"""
+        if not self.use_ai or not self.model:
+            print("[Entity Resolver] Gemini not available, skipping AI-based URL resolution")
+            return None
+        
+        if not vendor_name or vendor_name.lower() in ["unknown vendor", "unknown", ""]:
+            print("[Entity Resolver] No valid vendor name provided for AI resolution")
+            return None
+        
+        try:
+            print(f"[Entity Resolver] Using Gemini to resolve vendor URL for: {vendor_name} / {product_name}")
+            prompt = f"""Given the following vendor and product information, provide the official website URL for the vendor.
+
+Vendor Name: {vendor_name}
+Product Name: {product_name or 'Not specified'}
+
+Please provide ONLY the official website URL (e.g., https://www.company.com) in JSON format:
+{{"url": "https://www.example.com"}}
+
+If you cannot determine the URL with high confidence, return:
+{{"url": null}}
+
+Respond with ONLY valid JSON, no additional text or explanation."""
+
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Try to extract JSON from response
+            # Remove markdown code blocks if present
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                result = json.loads(response_text)
+                resolved_url = result.get("url")
+                if resolved_url and resolved_url.startswith("http"):
+                    print(f"[Entity Resolver] ✓ Gemini resolved vendor URL: {resolved_url}")
+                    return resolved_url
+                else:
+                    print(f"[Entity Resolver] ✗ Gemini returned invalid URL: {resolved_url}")
+                    return None
+            except json.JSONDecodeError as e:
+                print(f"[Entity Resolver] ✗ Failed to parse Gemini JSON response: {e}")
+                print(f"[Entity Resolver] Response was: {response_text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"[Entity Resolver] ✗ Error using Gemini for URL resolution: {e}")
+            return None
+    
     async def resolve(self, product_name: Optional[str] = None,
                      vendor_name: Optional[str] = None,
                      url: Optional[str] = None) -> Dict[str, str]:
-        """Resolve entity and vendor names"""
+        """Resolve entity and vendor names, and optionally resolve vendor URL using Gemini"""
         print(f"[Entity Resolver] Resolving entity - product: {product_name}, vendor: {vendor_name}, url: {url}")
         resolved_entity = product_name or ""
         resolved_vendor = vendor_name or ""
+        resolved_url = url or ""
+        
+        # If no URL provided, try to resolve it using Gemini
+        if not resolved_url and resolved_vendor and resolved_vendor.lower() not in ["unknown vendor", "unknown", ""]:
+            print(f"[Entity Resolver] No URL provided, attempting to resolve using Gemini...")
+            gemini_url = await self.resolve_vendor_url_with_gemini(resolved_entity, resolved_vendor)
+            if gemini_url:
+                resolved_url = gemini_url
         
         # If URL provided, try to extract vendor/product info
-        if url:
+        if resolved_url:
             try:
                 from urllib.parse import urlparse
-                parsed = urlparse(url)
+                parsed = urlparse(resolved_url)
                 domain = parsed.netloc or parsed.path.split('/')[0]
                 domain = domain.replace("www.", "")
                 
@@ -494,8 +694,8 @@ class EntityResolver:
         result = {
             "entity_name": resolved_entity,
             "vendor_name": resolved_vendor,
-            "resolved_url": url or ""
+            "resolved_url": resolved_url
         }
-        print(f"[Entity Resolver] ✓ Resolved to: {result['entity_name']} / {result['vendor_name']}")
+        print(f"[Entity Resolver] ✓ Resolved to: {result['entity_name']} / {result['vendor_name']} (URL: {result['resolved_url'] or 'none'})")
         return result
 
