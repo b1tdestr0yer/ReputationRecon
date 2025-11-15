@@ -1,9 +1,10 @@
 import sqlite3
 import json
-from datetime import datetime
-from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 import hashlib
+import config
 
 
 class AssessmentCache:
@@ -54,9 +55,19 @@ class AssessmentCache:
         return hashlib.sha256(key_string.encode()).hexdigest()
     
     def get(self, product_name: Optional[str] = None, vendor_name: Optional[str] = None,
-            url: Optional[str] = None, hash: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Retrieve cached assessment"""
+            url: Optional[str] = None, hash: Optional[str] = None, 
+            ttl_days: Optional[int] = None) -> Optional[Tuple[Dict[str, Any], bool]]:
+        """
+        Retrieve cached assessment with expiration check
+        
+        Returns:
+            Tuple of (cached_data, is_valid) or None if not found
+            is_valid indicates if cache is still within TTL
+        """
         cache_key = self._generate_key(product_name, vendor_name, url, hash)
+        
+        # Use config default or provided TTL (7 days for security assessments)
+        ttl = ttl_days if ttl_days is not None else config.Config.CACHE_TTL_DAYS
         
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -72,10 +83,36 @@ class AssessmentCache:
         
         if result:
             data = json.loads(result[0])
+            updated_at_str = result[2]
+            
+            # Parse timestamp
+            try:
+                if isinstance(updated_at_str, str):
+                    # Handle ISO format
+                    if 'T' in updated_at_str:
+                        updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+                    else:
+                        # SQLite datetime format
+                        updated_at = datetime.strptime(updated_at_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    updated_at = datetime.fromisoformat(updated_at_str)
+            except (ValueError, AttributeError):
+                # Fallback: assume it's valid if we can't parse
+                updated_at = datetime.now()
+            
+            # Check if cache is still valid
+            expiration_time = updated_at + timedelta(days=ttl)
+            is_valid = datetime.now() < expiration_time
+            
+            # Add cache metadata
             data['cache_key'] = cache_key
             data['cached_at'] = result[1]
             data['updated_at'] = result[2]
-            return data
+            data['is_cached'] = True
+            data['cache_valid'] = is_valid
+            data['cache_expires_at'] = expiration_time.isoformat()
+            
+            return (data, is_valid)
         
         return None
     
@@ -116,8 +153,11 @@ class AssessmentCache:
         else:
             return obj
     
-    def clear_old(self, days: int = 30):
-        """Clear assessments older than specified days"""
+    def clear_old(self, days: Optional[int] = None):
+        """Clear assessments older than specified days (defaults to TTL from config)"""
+        if days is None:
+            days = config.Config.CACHE_TTL_DAYS
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         

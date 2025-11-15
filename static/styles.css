@@ -664,3 +664,11 @@ button:active {
     }
 }
 
+.refresh-assessment-btn #refreshIcon {
+    transition: transform 0.3s ease;
+}
+
+.refresh-assessment-btn #refreshIcon.spinning {
+    animation: spin 1s linear infinite;
+}
+

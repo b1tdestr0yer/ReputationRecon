@@ -19,9 +19,9 @@ class Config:
     # Google Gemini API Key (required for AI-powered analysis)
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     
-    # Cache settings
+    # Cache settings (7 days default for security assessments - security data changes frequently)
     CACHE_DB_PATH: str = os.getenv("CACHE_DB_PATH", "assessments_cache.db")
-    CACHE_TTL_DAYS: int = int(os.getenv("CACHE_TTL_DAYS", "30"))
+    CACHE_TTL_DAYS: int = int(os.getenv("CACHE_TTL_DAYS", "7"))
     
     # API rate limits
     ASSESSMENT_RATE_LIMIT: str = os.getenv("ASSESSMENT_RATE_LIMIT", "10/minute")

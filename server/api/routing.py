@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import JSONResponse, Response
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -151,6 +151,7 @@ async def virustotal_search(hash: str, request: Request) -> JSONResponse:
     description="""
     Perform a comprehensive security assessment of an application.
     Returns a CISO-ready trust brief with security posture, trust score, and safer alternatives.
+    Supports caching - results are cached for 7 days by default.
     """,
     response_model=AssessmentResponse,
     responses={
@@ -160,14 +161,22 @@ async def virustotal_search(hash: str, request: Request) -> JSONResponse:
     }
 )
 @limiter.limit("10/minute")
-async def assess_application(assessment_request: AssessmentRequest, request: Request) -> AssessmentResponse:
+async def assess_application(
+    assessment_request: AssessmentRequest, 
+    request: Request,
+    force_refresh: bool = Query(False, description="Bypass cache and generate fresh assessment")
+) -> AssessmentResponse:
     """
     Assess an application's security posture.
     
     Requires at least one of: product_name, vendor_name, or url.
+    
+    Query parameters:
+    - force_refresh: If True, bypass cache and generate fresh assessment
     """
     print(f"\n[API] POST /api/assess - Request received from {request.client.host if request.client else 'unknown'}")
     print(f"[API] Request data: {assessment_request.model_dump()}")
+    print(f"[API] Force refresh: {force_refresh}")
     
     if not assessment_request.product_name and not assessment_request.vendor_name and not assessment_request.url:
         print("[API] ✗ Validation failed: Missing required fields")
@@ -178,8 +187,8 @@ async def assess_application(assessment_request: AssessmentRequest, request: Req
     
     try:
         print("[API] Starting assessment...")
-        assessment = await assessment_service.assess(assessment_request)
-        print(f"[API] ✓ Assessment complete, returning response")
+        assessment = await assessment_service.assess(assessment_request, force_refresh=force_refresh)
+        print(f"[API] ✓ Assessment complete, returning response (Cached: {assessment.is_cached})")
         return assessment
     except Exception as e:
         print(f"[API] ✗ ERROR during assessment: {str(e)}")

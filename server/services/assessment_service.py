@@ -25,29 +25,45 @@ class AssessmentService:
         self.classifier = SoftwareClassifier()
         self.synthesizer = AISynthesizer()
     
-    async def assess(self, request: AssessmentRequest) -> AssessmentResponse:
+    async def assess(self, request: AssessmentRequest, force_refresh: bool = False) -> AssessmentResponse:
         """Perform complete security assessment"""
         print("\n" + "="*60)
         print("[Assessment Service] Starting new assessment")
         print(f"[Assessment Service] Request: product={request.product_name}, vendor={request.vendor_name}, url={request.url}, hash={'***' if request.hash else None}")
         print("="*60)
         
-        # Check cache first
-        print("[Assessment Service] Checking cache...")
-        cached = self.cache.get(
-            product_name=request.product_name,
-            vendor_name=request.vendor_name,
-            url=request.url,
-            hash=request.hash
-        )
+        # Check cache first (unless force refresh)
+        cached_data = None
+        is_cached = False
+        cache_valid = False
         
-        if cached:
-            print("[Assessment Service] ⚠ Cache hit found, but generating fresh assessment")
-            # Return cached result (would need to reconstruct AssessmentResponse)
-            # For now, continue to generate fresh assessment
-            pass
+        if not force_refresh:
+            print("[Assessment Service] Checking cache...")
+            cache_result = self.cache.get(
+                product_name=request.product_name,
+                vendor_name=request.vendor_name,
+                url=request.url,
+                hash=request.hash
+            )
+            
+            if cache_result:
+                cached_data, cache_valid = cache_result
+                if cache_valid:
+                    print(f"[Assessment Service] ✓ Cache hit found (valid until {cached_data.get('cache_expires_at', 'unknown')})")
+                    is_cached = True
+                    # Reconstruct AssessmentResponse from cached data
+                    try:
+                        response = AssessmentResponse(**cached_data)
+                        return response
+                    except Exception as e:
+                        print(f"[Assessment Service] ⚠ Error reconstructing cached response: {e}, generating fresh assessment")
+                        cached_data = None
+                else:
+                    print(f"[Assessment Service] ⚠ Cache entry found but expired (expired at {cached_data.get('cache_expires_at', 'unknown')}), generating fresh assessment")
+            else:
+                print("[Assessment Service] No cache entry found")
         else:
-            print("[Assessment Service] No cache entry found")
+            print("[Assessment Service] Force refresh requested, bypassing cache")
         
         # Step 1: Resolve entity and vendor (including URL via Gemini if not provided)
         print("\n[Assessment Service] Step 1: Resolving entity and vendor...")
@@ -171,26 +187,43 @@ class AssessmentService:
             data_quality=data_quality
         )
         
-        # Cache the result
-        print(f"[Assessment Service] Caching assessment result...")
-        cache_data = response.model_dump()
-        self.cache.set(
-            product_name=request.product_name,
-            vendor_name=request.vendor_name,
-            url=request.url,
-            hash=request.hash,
-            assessment_data=cache_data
-        )
+        # Cache the result (if not from cache)
+        if not is_cached:
+            print(f"[Assessment Service] Caching assessment result...")
+            cache_data = response.model_dump()
+            # Remove cache metadata before storing (to avoid duplication)
+            cache_data.pop('is_cached', None)
+            cache_data.pop('cached_at', None)
+            cache_data.pop('cache_expires_at', None)
+            self.cache.set(
+                product_name=request.product_name,
+                vendor_name=request.vendor_name,
+                url=request.url,
+                hash=request.hash,
+                assessment_data=cache_data
+            )
+            print(f"[Assessment Service] ✓ Assessment cached")
         
-        # Set cache key in response
+        # Set cache metadata in response
         response.cache_key = self.cache._generate_key(
             request.product_name,
             request.vendor_name,
             request.url,
             request.hash
         )
+        response.is_cached = is_cached
+        if is_cached and cached_data:
+            response.cached_at = cached_data.get('cached_at')
+            response.cache_expires_at = cached_data.get('cache_expires_at')
+        else:
+            # Calculate expiration for new assessment
+            from datetime import timedelta
+            import config
+            ttl_days = config.Config.CACHE_TTL_DAYS
+            expires_at = response.assessment_timestamp + timedelta(days=ttl_days)
+            response.cache_expires_at = expires_at.isoformat()
         
-        print(f"[Assessment Service] ✓ Assessment complete!")
+        print(f"[Assessment Service] ✓ Assessment complete! (Cached: {is_cached})")
         print("="*60 + "\n")
         return response
     

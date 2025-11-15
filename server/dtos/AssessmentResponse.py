@@ -93,4 +93,7 @@ class AssessmentResponse(BaseModel):
     assessment_timestamp: datetime = Field(default_factory=datetime.now, description="When assessment was performed")
     data_quality: str = Field("sufficient", description="Data quality: sufficient, limited, insufficient")
     cache_key: Optional[str] = Field(None, description="Cache key for this assessment")
+    is_cached: bool = Field(False, description="Whether this result was retrieved from cache")
+    cached_at: Optional[str] = Field(None, description="When the assessment was originally cached")
+    cache_expires_at: Optional[str] = Field(None, description="When the cache entry expires")
 

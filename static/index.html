@@ -153,8 +153,8 @@
             container.appendChild(div);
         }
         
-        async function assessApplication() {
-            console.log('assessApplication() called');
+        async function assessApplication(forceRefresh = false) {
+            console.log('assessApplication() called', { forceRefresh });
             const product = document.getElementById('product').value;
             const vendor = document.getElementById('vendor').value;
             const hash = document.getElementById('hash').value;
@@ -180,7 +180,8 @@
                 };
                 console.log('Request body:', requestBody);
                 
-                const response = await fetch('/api/assess', {
+                const url = `/api/assess${forceRefresh ? '?force_refresh=true' : ''}`;
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -208,6 +209,11 @@
             } finally {
                 document.getElementById('loading').classList.remove('show');
             }
+        }
+        
+        async function refreshAssessment() {
+            // Refresh the assessment with force_refresh=true
+            await assessApplication(true);
         }
         
         async function compareApplications() {
@@ -695,6 +701,147 @@
                 </div>
             `;
             
+            // Add cache information section at the end - professional card design
+            const isCached = data.is_cached || false;
+            const cachedAt = data.cached_at || null;
+            const cacheExpiresAt = data.cache_expires_at || null;
+            const assessmentTimestamp = data.assessment_timestamp || new Date().toISOString();
+            
+            // Format dates and calculate relative time
+            const assessmentDate = new Date(assessmentTimestamp);
+            const now = new Date();
+            const timeDiff = now - assessmentDate;
+            
+            const formattedDate = assessmentDate.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Calculate relative time
+            function getRelativeTime(date) {
+                const diff = now - date;
+                const seconds = Math.floor(diff / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                
+                if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ago`;
+                if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+                if (minutes > 0) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+                return 'just now';
+            }
+            
+            const relativeTime = getRelativeTime(assessmentDate);
+            
+            let cacheInfoHTML = `
+                <div class="section" style="margin-top: 40px;">
+                    <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 12px; border-left: 4px solid #667eea; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <i class="fas fa-clock" style="color: #667eea; font-size: 1.3em;"></i>
+                                    <div>
+                                        <div style="font-size: 0.85em; color: #666; margin-bottom: 2px;">Assessment Performed</div>
+                                        <div style="font-weight: 600; color: #333; font-size: 1em;">${formattedDate}</div>
+                                        <div style="font-size: 0.85em; color: #999; margin-top: 2px;">${relativeTime}</div>
+                                    </div>
+                                </div>
+            `;
+            
+            // Cache status with detailed information
+            if (isCached && cachedAt) {
+                const cachedDate = new Date(cachedAt);
+                const formattedCachedDate = cachedDate.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const cachedRelativeTime = getRelativeTime(cachedDate);
+                
+                let expiresInfo = '';
+                let expiresBadge = '';
+                if (cacheExpiresAt) {
+                    const expiresDate = new Date(cacheExpiresAt);
+                    const timeUntilExpiry = expiresDate - now;
+                    const daysUntilExpiry = Math.ceil(timeUntilExpiry / (1000 * 60 * 60 * 24));
+                    const hoursUntilExpiry = Math.ceil(timeUntilExpiry / (1000 * 60 * 60));
+                    
+                    const formattedExpiresDate = expiresDate.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    if (daysUntilExpiry > 0) {
+                        expiresInfo = `Expires: ${formattedExpiresDate} (in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''})`;
+                        expiresBadge = `<span style="background: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; margin-left: 8px;">Valid for ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}</span>`;
+                    } else if (hoursUntilExpiry > 0) {
+                        expiresInfo = `Expires: ${formattedExpiresDate} (in ${hoursUntilExpiry} hour${hoursUntilExpiry !== 1 ? 's' : ''})`;
+                        expiresBadge = `<span style="background: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; margin-left: 8px;">Expires soon</span>`;
+                    } else {
+                        expiresInfo = `Expired: ${formattedExpiresDate}`;
+                        expiresBadge = `<span style="background: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; margin-left: 8px;">Expired</span>`;
+                    }
+                }
+                
+                cacheInfoHTML += `
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <i class="fas fa-database" style="color: #ffc107; font-size: 1.3em;"></i>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                            <div style="font-size: 0.85em; color: #666; margin-bottom: 2px;">Retrieved from Cache</div>
+                                            ${expiresBadge}
+                                        </div>
+                                        <div style="font-weight: 600; color: #333; font-size: 1em;">${formattedCachedDate}</div>
+                                        <div style="font-size: 0.85em; color: #999; margin-top: 2px;">Cached ${cachedRelativeTime}</div>
+                                        ${expiresInfo ? `<div style="font-size: 0.85em; color: #666; margin-top: 4px;"><i class="fas fa-hourglass-half" style="margin-right: 4px;"></i>${expiresInfo}</div>` : ''}
+                                    </div>
+                                </div>
+                `;
+            } else {
+                cacheInfoHTML += `
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-sync-alt" style="color: #28a745; font-size: 1.3em;"></i>
+                                    <div>
+                                        <div style="font-size: 0.85em; color: #666; margin-bottom: 2px;">Cache Status</div>
+                                        <div style="font-weight: 600; color: #333; font-size: 1em;">Fresh Assessment</div>
+                                        <div style="font-size: 0.85em; color: #999; margin-top: 2px;">Generated just now</div>
+                                    </div>
+                                </div>
+                `;
+            }
+            
+            cacheInfoHTML += `
+                            </div>
+            `;
+            
+            // Add refresh button if cached - with animation
+            if (isCached) {
+                cacheInfoHTML += `
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <button onclick="refreshAssessment()" id="refreshBtn" class="refresh-assessment-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 0.95em; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; position: relative; overflow: hidden;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(102, 126, 234, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)';">
+                                    <i class="fas fa-sync-alt" id="refreshIcon"></i>
+                                    <span>Update Assessment</span>
+                                </button>
+                            </div>
+                `;
+            }
+            
+            cacheInfoHTML += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            html += cacheInfoHTML;
+            
             resultsDiv.innerHTML = html;
             resultsDiv.classList.add('show');
             
@@ -706,6 +853,16 @@
             
             // Render spider chart
             renderSpiderChart(data);
+            
+            // Add refresh button animation - continuous spin on click
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshBtn && refreshIcon) {
+                refreshBtn.addEventListener('click', function() {
+                    refreshIcon.classList.add('spinning');
+                    // Animation will stop when page reloads with new results
+                });
+            }
         }
         
         function renderSpiderChart(data) {
