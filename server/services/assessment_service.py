@@ -89,7 +89,13 @@ class AssessmentService:
         print(f"  - CISA KEV: {len(collected_data.get('cisa_kev', []))}")
         print(f"  - Vendor page: {'✓' if collected_data.get('vendor_page') else '✗'}")
         print(f"  - Terms of Service: {'✓' if collected_data.get('terms_of_service') else '✗'}")
-        print(f"  - VirusTotal: {'✓' if collected_data.get('virustotal') else '✗'}")
+        vt_report = collected_data.get('virustotal')
+        if vt_report and vt_report.get('response_code') == 1:
+            exe_name = vt_report.get('exe_name')
+            exe_info = f" (EXE: {exe_name})" if exe_name else ""
+            print(f"  - VirusTotal: ✓{exe_info}")
+        else:
+            print(f"  - VirusTotal: ✗")
         hashlookup_info = collected_data.get('hashlookup')
         if hashlookup_info and hashlookup_info.get('found'):
             version = hashlookup_info.get('product_version', '') or 'unknown'
@@ -259,17 +265,29 @@ class AssessmentService:
         # Extract latest version from vendor page if available (prefer this as it's the "latest" version)
         product_version = None
         version_source = None
+        version_confidence = 0.0
         
-        # First, try to get version from hashlookup
-        if hashlookup_info and hashlookup_info.get("found"):
-            product_version = hashlookup_info.get("product_version")
+        # First, try to get version from VirusTotal (from file details, history, comments)
+        if vt_report and vt_report.get("response_code") == 1:
+            vt_version = vt_report.get("detected_version")
+            vt_confidence = vt_report.get("version_confidence", 0.0)
+            if vt_version and vt_version.strip():
+                product_version = vt_version.strip()
+                version_source = "virustotal"
+                version_confidence = vt_confidence
+                print(f"[Assessment Service] ✓ Detected product version from VirusTotal: {product_version} (confidence: {int(vt_confidence*100)}%)")
+        
+        # Then, try to get version from hashlookup (fallback)
+        if not product_version and hashlookup_info and hashlookup_info.get("found"):
+            hashlookup_version = hashlookup_info.get("product_version")
             # Check if version exists and is not empty
-            if product_version and product_version.strip():
-                print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
+            if hashlookup_version and hashlookup_version.strip():
+                product_version = hashlookup_version.strip()
                 version_source = "hashlookup"
-                product_version = product_version.strip()
+                version_confidence = 0.7  # Medium confidence for hashlookup
+                print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
         
-        # Then, try to get latest version from vendor page (this takes precedence as it's the "latest")
+        # Finally, try to get latest version from vendor page (this takes precedence as it's the "latest")
         if vendor_page and vendor_page.get("content") and vendor_page.get("url"):
             print(f"[Assessment Service] Attempting to extract latest version from vendor page...")
             latest_version = await self.vendor_collector.extract_latest_version(
@@ -282,6 +300,7 @@ class AssessmentService:
                 print(f"[Assessment Service] ✓ Extracted latest version from vendor page: {latest_version}")
                 product_version = latest_version  # Prefer vendor page version as it's the "latest"
                 version_source = "vendor_page"
+                version_confidence = 0.8  # High confidence for vendor page
             else:
                 print(f"[Assessment Service] Could not extract version from vendor page")
         
@@ -294,17 +313,25 @@ class AssessmentService:
             # Merge version-specific data into CVE results
             cve_data.update(version_cve_data)
         
-        # Update hashlookup_info with the version we're using (vendor page version takes precedence)
+        # Update hashlookup_info with the version we're using (for backward compatibility)
+        # The version_source indicates where it came from (vendor_page > virustotal > hashlookup)
         if product_version and hashlookup_info:
             hashlookup_info["product_version"] = product_version
             hashlookup_info["version_source"] = version_source or "unknown"
+            hashlookup_info["version_confidence"] = version_confidence
         elif product_version and not hashlookup_info:
             # Create hashlookup_info dict if it doesn't exist but we have a version
             hashlookup_info = {
                 "found": True,
                 "product_version": product_version,
-                "version_source": version_source or "vendor_page"
+                "version_source": version_source or "unknown",
+                "version_confidence": version_confidence
             }
+        
+        # Extract exe_name from VirusTotal if available
+        exe_name = None
+        if vt_report and vt_report.get("response_code") == 1:
+            exe_name = vt_report.get("exe_name")
         
         return {
             "cves": cve_data,
@@ -314,7 +341,8 @@ class AssessmentService:
             "virustotal": vt_report,
             "hashlookup": hashlookup_info,
             "incidents": incidents,
-            "hash": hash  # Store hash for building URLs in citations
+            "hash": hash,  # Store hash for building URLs in citations
+            "exe_name": exe_name  # Executable name from VirusTotal
         }
     
     async def compare(self, requests: list[AssessmentRequest]) -> Dict[str, Any]:

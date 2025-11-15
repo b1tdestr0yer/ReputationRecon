@@ -504,6 +504,7 @@ class VirusTotalCollector(DataCollector):
         size = attributes.get("size", 0)
         tags = attributes.get("tags", [])
         names = attributes.get("names", [])
+        first_submission = attributes.get("first_submission_date", 0)
         
         # Get last analysis results (detailed engine results)
         last_analysis_results = attributes.get("last_analysis_results", {})
@@ -518,14 +519,181 @@ class VirusTotalCollector(DataCollector):
         # Fetch additional data from other v3 endpoints
         comments_data = await self._fetch_v3(f"/files/{hash}/comments", api_key)
         comments = []
+        community_notes = []
         if comments_data and "data" in comments_data:
-            comments = comments_data.get("data", [])[:5]  # Limit to 5 most recent
+            all_comments = comments_data.get("data", [])
+            comments = all_comments[:5]  # Limit to 5 most recent for backward compatibility
+            # Extract community notes (all comments with text)
+            community_notes = [
+                {
+                    "text": c.get("attributes", {}).get("text", ""),
+                    "date": c.get("attributes", {}).get("date", 0),
+                    "votes": c.get("attributes", {}).get("votes", {}),
+                    "author": c.get("attributes", {}).get("author", "")
+                }
+                for c in all_comments[:20]  # Get up to 20 community notes
+                if c.get("attributes", {}).get("text", "").strip()
+            ]
         
         # Fetch relationships (related files, URLs, etc.)
         relationships_data = await self._fetch_v3(f"/files/{hash}/relationships", api_key)
         relationships = {}
         if relationships_data and "data" in relationships_data:
             relationships = relationships_data.get("data", {})
+        
+        # Fetch submission history (if endpoint exists)
+        submission_history = []
+        try:
+            history_data = await self._fetch_v3(f"/files/{hash}/history", api_key)
+            if history_data and "data" in history_data:
+                history_items = history_data.get("data", [])
+                submission_history = [
+                    {
+                        "date": item.get("attributes", {}).get("date", 0),
+                        "submission_names": item.get("attributes", {}).get("submission_names", []),
+                        "submission_names_count": item.get("attributes", {}).get("submission_names_count", 0),
+                        "submission_id": item.get("id", "")
+                    }
+                    for item in history_items[:10]  # Get up to 10 most recent submissions
+                ]
+        except Exception as e:
+            # History endpoint might not be available or might fail
+            # We'll use names from attributes as fallback
+            pass
+        
+        # If no history from endpoint, use names from attributes as submission history
+        if not submission_history and names:
+            submission_history = [
+                {
+                    "date": first_submission if first_submission > 0 else attributes.get("last_submission_date", 0),
+                    "submission_names": names[:10],
+                    "submission_names_count": len(names),
+                    "submission_id": ""
+                }
+            ]
+        
+        # Extract executable name from various sources
+        exe_name = None
+        # Try meaningful_name first (most reliable)
+        if meaningful_name:
+            exe_name = meaningful_name
+        # Try names array (common file names)
+        elif names and len(names) > 0:
+            # Filter for .exe files or take the first one
+            exe_names = [n for n in names if n.lower().endswith('.exe')]
+            if exe_names:
+                exe_name = exe_names[0]
+            else:
+                exe_name = names[0]
+        # Try from submission history
+        if not exe_name and submission_history:
+            for hist_item in submission_history:
+                submission_names = hist_item.get("submission_names", [])
+                if submission_names:
+                    exe_names = [n for n in submission_names if n.lower().endswith('.exe')]
+                    if exe_names:
+                        exe_name = exe_names[0]
+                        break
+                    exe_name = submission_names[0]
+                    break
+        
+        # Extract version information from VT data (details, history, comments)
+        detected_version = None
+        version_confidence = 0.0
+        
+        # Try to extract version from file names
+        version_patterns = [
+            r'[vV]?(\d+\.\d+\.\d+\.\d+)',  # 1.2.3.4
+            r'[vV]?(\d+\.\d+\.\d+)',       # 1.2.3
+            r'[vV]?(\d+\.\d+)',            # 1.2
+            r'[vV](\d+)',                  # v1
+        ]
+        
+        version_candidates = {}
+        
+        # Check meaningful_name
+        if meaningful_name:
+            for pattern in version_patterns:
+                match = re.search(pattern, meaningful_name)
+                if match:
+                    version = match.group(1)
+                    version_candidates[version] = version_candidates.get(version, 0) + 3  # High weight
+                    break
+        
+        # Check names array
+        for name in names[:10]:  # Check first 10 names
+            for pattern in version_patterns:
+                match = re.search(pattern, name)
+                if match:
+                    version = match.group(1)
+                    version_candidates[version] = version_candidates.get(version, 0) + 2  # Medium weight
+                    break
+        
+        # Check submission history names
+        for hist_item in submission_history:
+            submission_names = hist_item.get("submission_names", [])
+            for name in submission_names[:5]:  # Check first 5 names per submission
+                for pattern in version_patterns:
+                    match = re.search(pattern, name)
+                    if match:
+                        version = match.group(1)
+                        version_candidates[version] = version_candidates.get(version, 0) + 1  # Lower weight
+                        break
+        
+        # Check community notes for version mentions
+        for note in community_notes:
+            note_text = note.get("text", "")
+            for pattern in version_patterns:
+                match = re.search(pattern, note_text)
+                if match:
+                    version = match.group(1)
+                    version_candidates[version] = version_candidates.get(version, 0) + 1  # Lower weight
+                    break
+        
+        # Select most common/weighted version
+        if version_candidates:
+            detected_version = max(version_candidates.items(), key=lambda x: x[1])[0]
+            max_weight = max(version_candidates.values())
+            # Calculate confidence based on weight and frequency
+            if max_weight >= 3:
+                version_confidence = 0.8  # High confidence from meaningful_name
+            elif max_weight >= 2:
+                version_confidence = 0.6  # Medium confidence from names
+            else:
+                version_confidence = 0.4  # Lower confidence from history/notes
+            
+            # Boost confidence if version appears multiple times
+            if version_candidates[detected_version] > 1:
+                version_confidence = min(0.95, version_confidence + 0.1)
+        
+        # Get additional file details
+        file_details = {
+            "exiftool": attributes.get("exiftool", {}),
+            "pe_info": attributes.get("pe_info", {}),
+            "trid": attributes.get("trid", []),
+            "magic": attributes.get("magic", ""),
+            "creation_date": attributes.get("creation_date", 0),
+            "signature_info": attributes.get("signature_info", {}),
+            "authentihash": attributes.get("authentihash", ""),
+            "ssdeep": attributes.get("ssdeep", ""),
+            "tlsh": attributes.get("tlsh", ""),
+            "vhash": attributes.get("vhash", ""),
+        }
+        
+        # Extract version from PE info if available
+        if not detected_version and file_details.get("pe_info"):
+            pe_info = file_details["pe_info"]
+            # Try to get version from PE version info
+            if isinstance(pe_info, dict):
+                version_info = pe_info.get("version_info", {})
+                if isinstance(version_info, dict):
+                    file_version = version_info.get("FileVersion") or version_info.get("ProductVersion")
+                    if file_version:
+                        # Clean up version string
+                        version_match = re.search(r'(\d+\.\d+\.\d+\.\d+|\d+\.\d+\.\d+|\d+\.\d+)', str(file_version))
+                        if version_match:
+                            detected_version = version_match.group(1)
+                            version_confidence = 0.9  # High confidence from PE info
         
         # Calculate detection metrics
         detection_consensus = positives / total_engines if total_engines > 0 else 0.0
@@ -687,6 +855,8 @@ class VirusTotalCollector(DataCollector):
             "sigma_analysis_stats": sigma_analysis_stats,
             "crowdsourced_yara_results": crowdsourced_yara_results,
             "comments": comments,
+            "community_notes": community_notes,
+            "submission_history": submission_history,
             "relationships": relationships,
             "detection_consensus": detection_consensus,
             "false_positive_indicators": false_positive_indicators,
@@ -700,10 +870,27 @@ class VirusTotalCollector(DataCollector):
             "first_submission_date": first_submission,
             "last_submission_date": attributes.get("last_submission_date", 0),
             "last_analysis_date": attributes.get("last_analysis_date", 0),
+            "exe_name": exe_name,
+            "detected_version": detected_version,
+            "version_confidence": version_confidence,
+            "file_details": file_details,
             "v3_api": True
         }
         
-        print(f"[VirusTotal Collector] ✓ v3 Report: {positives}/{total_engines} flagged ({malicious} malicious, {suspicious} suspicious), reputation: {reputation}, risk: {risk_level} (confidence: {int(risk_confidence*100)}%)")
+        # Log additional information
+        log_parts = [f"{positives}/{total_engines} flagged ({malicious} malicious, {suspicious} suspicious)"]
+        log_parts.append(f"reputation: {reputation}")
+        log_parts.append(f"risk: {risk_level} (confidence: {int(risk_confidence*100)}%)")
+        if exe_name:
+            log_parts.append(f"exe: {exe_name}")
+        if detected_version:
+            log_parts.append(f"version: {detected_version} (confidence: {int(version_confidence*100)}%)")
+        if community_notes:
+            log_parts.append(f"community notes: {len(community_notes)}")
+        if submission_history:
+            log_parts.append(f"submissions: {len(submission_history)}")
+        
+        print(f"[VirusTotal Collector] ✓ v3 Report: {', '.join(log_parts)}")
         
         return normalized_data
     

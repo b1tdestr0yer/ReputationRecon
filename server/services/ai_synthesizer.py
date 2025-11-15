@@ -159,12 +159,42 @@ class AISynthesizer:
         vendor_name = data.get("vendor_name", "the vendor")
         vendor_page = data.get("vendor_page") or {}
         tos = data.get("terms_of_service") or {}
+        vt = data.get("virustotal")
         content = ""
         
         if vendor_page and vendor_page.get("content"):
             content += f"Vendor page content:\n{vendor_page.get('content', '')[:3000]}\n\n"
         if tos and tos.get("content"):
             content += f"Terms of Service content:\n{tos.get('content', '')[:2000]}\n\n"
+        
+        # Add VirusTotal file information if available
+        if vt and vt.get("response_code") == 1:
+            exe_name = vt.get("exe_name")
+            meaningful_name = vt.get("meaningful_name")
+            type_description = vt.get("type_description")
+            file_details = vt.get("file_details", {})
+            
+            if exe_name or meaningful_name or type_description:
+                content += "File Information:\n"
+                if exe_name:
+                    content += f"Executable name: {exe_name}\n"
+                if meaningful_name:
+                    content += f"Meaningful name: {meaningful_name}\n"
+                if type_description:
+                    content += f"File type: {type_description}\n"
+                
+                # Add PE info if available
+                pe_info = file_details.get("pe_info", {})
+                if pe_info and isinstance(pe_info, dict):
+                    version_info = pe_info.get("version_info", {})
+                    if isinstance(version_info, dict):
+                        product_name = version_info.get("ProductName") or version_info.get("product_name")
+                        product_version = version_info.get("ProductVersion") or version_info.get("product_version")
+                        if product_name:
+                            content += f"PE Product Name: {product_name}\n"
+                        if product_version:
+                            content += f"PE Product Version: {product_version}\n"
+                content += "\n"
         
         # Use AI to generate description from available data
         if self.use_ai:
@@ -325,6 +355,31 @@ If information is limited, state that clearly. Write the usage description:"""
             # Add community comments if available
             if comments:
                 indicators.append(f"VirusTotal: {len(comments)} community comments available")
+            
+            # Add community notes (more detailed than comments)
+            community_notes = vt.get("community_notes", [])
+            if community_notes:
+                indicators.append(f"VirusTotal: {len(community_notes)} community notes available")
+            
+            # Add submission history information
+            submission_history = vt.get("submission_history", [])
+            if submission_history:
+                indicators.append(f"VirusTotal: {len(submission_history)} submission history entries")
+            
+            # Add executable name if available
+            exe_name = vt.get("exe_name")
+            if exe_name:
+                indicators.append(f"VirusTotal: Executable name: {exe_name}")
+            
+            # Add file details if available (PE info, etc.)
+            file_details = vt.get("file_details", {})
+            if file_details:
+                pe_info = file_details.get("pe_info", {})
+                if pe_info:
+                    indicators.append("VirusTotal: PE (Portable Executable) file information available")
+                signature_info = file_details.get("signature_info", {})
+                if signature_info:
+                    indicators.append("VirusTotal: Digital signature information available")
 
         if self.use_ai:
             try:
@@ -370,10 +425,23 @@ Write the vendor reputation summary:"""
         cves = data.get("cves") or {}
         kev = data.get("cisa_kev") or []
         hashlookup = data.get("hashlookup") or {}
-        # Get version from hashlookup (which may have been updated with vendor page version)
+        vt = data.get("virustotal")
+        
+        # Get version from multiple sources (priority: hashlookup > VT > vendor page)
+        # hashlookup may have been updated with vendor page or VT version
         detected_version = hashlookup.get("product_version") if hashlookup else None
         version_source = hashlookup.get("version_source", "unknown") if hashlookup else "unknown"
-        if detected_version:
+        
+        # If no version from hashlookup, try VirusTotal
+        if not detected_version and vt and vt.get("response_code") == 1:
+            vt_version = vt.get("detected_version")
+            if vt_version and vt_version.strip():
+                detected_version = vt_version.strip()
+                version_source = "virustotal"
+                version_confidence = vt.get("version_confidence", 0.0)
+                print(f"[AI Synthesizer] Using version {detected_version} from VirusTotal (confidence: {int(version_confidence*100)}%)")
+        
+        if detected_version and version_source != "virustotal":
             print(f"[AI Synthesizer] Using version {detected_version} (source: {version_source})")
         
         return CVESummary(
@@ -653,6 +721,22 @@ Vendor text:
                 claim_parts.append(f"threats: {threat_str}")
             if false_positive_indicators:
                 claim_parts.append("false positive indicators detected")
+            
+            # Add executable name if available
+            exe_name = vt.get("exe_name")
+            if exe_name:
+                claim_parts.append(f"file: {exe_name}")
+            
+            # Add version if detected from VT
+            detected_version = vt.get("detected_version")
+            if detected_version:
+                version_confidence = vt.get("version_confidence", 0.0)
+                claim_parts.append(f"version: {detected_version} ({int(version_confidence*100)}% confidence)")
+            
+            # Add community notes count
+            community_notes = vt.get("community_notes", [])
+            if community_notes:
+                claim_parts.append(f"{len(community_notes)} community notes")
             
             claim = ", ".join(claim_parts)
             
@@ -1499,6 +1583,52 @@ Important:
                         data_summary.append(f"- Threat names: {', '.join(threat_names[:5])}")
                     if false_positive_indicators:
                         data_summary.append(f"- False positive indicators: {', '.join(false_positive_indicators)}")
+                    
+                    # Add new VirusTotal data
+                    exe_name = vt.get("exe_name")
+                    if exe_name:
+                        data_summary.append(f"- Executable name: {exe_name}")
+                    
+                    detected_version = vt.get("detected_version")
+                    if detected_version:
+                        version_confidence = vt.get("version_confidence", 0.0)
+                        data_summary.append(f"- Detected version: {detected_version} (confidence: {int(version_confidence*100)}%)")
+                    
+                    community_notes = vt.get("community_notes", [])
+                    if community_notes:
+                        data_summary.append(f"- Community notes: {len(community_notes)} available")
+                        # Include first few community notes for context
+                        for i, note in enumerate(community_notes[:3], 1):
+                            note_text = note.get("text", "")[:200]
+                            if note_text:
+                                data_summary.append(f"  Note {i}: {note_text}...")
+                    
+                    submission_history = vt.get("submission_history", [])
+                    if submission_history:
+                        data_summary.append(f"- Submission history: {len(submission_history)} entries")
+                        # Include submission names from first entry
+                        first_submission = submission_history[0]
+                        submission_names = first_submission.get("submission_names", [])
+                        if submission_names:
+                            data_summary.append(f"  Sample submission names: {', '.join(submission_names[:3])}")
+                    
+                    file_details = vt.get("file_details", {})
+                    if file_details:
+                        pe_info = file_details.get("pe_info", {})
+                        if pe_info and isinstance(pe_info, dict):
+                            version_info = pe_info.get("version_info", {})
+                            if isinstance(version_info, dict):
+                                product_name = version_info.get("ProductName") or version_info.get("product_name")
+                                product_version = version_info.get("ProductVersion") or version_info.get("product_version")
+                                if product_name:
+                                    data_summary.append(f"- PE Product Name: {product_name}")
+                                if product_version:
+                                    data_summary.append(f"- PE Product Version: {product_version}")
+                        
+                        signature_info = file_details.get("signature_info", {})
+                        if signature_info:
+                            data_summary.append("- Digital signature information available")
+                    
                     data_summary.append("")
                 
                 # Vendor page content (truncated)
