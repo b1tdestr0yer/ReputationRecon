@@ -1302,3 +1302,154 @@ Important:
         ])
         
         return fallback_alternatives[:2]  # Return max 2 from fallback
+
+    # -------------------------------------------------------------------------
+    # SUGGESTION
+    # -------------------------------------------------------------------------
+    async def generate_suggestion(
+        self,
+        entity_name: str,
+        vendor_name: str,
+        category: SoftwareCategory,
+        security_posture: SecurityPosture,
+        trust_score: TrustScore,
+        collected_data: Dict[str, Any]
+    ) -> str:
+        """Generate AI suggestion on whether to use this application on a company laptop"""
+        if self.use_ai and self.model:
+            try:
+                # Build comprehensive data summary for the AI
+                data_summary = []
+                
+                # Product information
+                data_summary.append(f"Product: {entity_name}")
+                data_summary.append(f"Vendor: {vendor_name}")
+                data_summary.append(f"Category: {category.value}")
+                data_summary.append("")
+                
+                # Security posture information
+                data_summary.append("Security Posture Summary:")
+                data_summary.append(f"- Description: {security_posture.description}")
+                data_summary.append(f"- Usage: {security_posture.usage}")
+                data_summary.append(f"- Vendor Reputation: {security_posture.vendor_reputation}")
+                data_summary.append(f"- Incidents/Abuse: {security_posture.incidents_abuse}")
+                data_summary.append(f"- Data Handling: {security_posture.data_handling}")
+                data_summary.append(f"- Deployment Controls: {security_posture.deployment_controls}")
+                data_summary.append("")
+                
+                # CVE information
+                cve = security_posture.cve_summary
+                data_summary.append("CVE Information:")
+                data_summary.append(f"- Total CVEs: {cve.total_cves}")
+                data_summary.append(f"- Critical CVEs: {cve.critical_count}")
+                data_summary.append(f"- High CVEs: {cve.high_count}")
+                data_summary.append(f"- CISA KEV entries: {cve.cisa_kev_count}")
+                if cve.detected_version:
+                    data_summary.append(f"- Detected Version: {cve.detected_version}")
+                    data_summary.append(f"- Version-specific CVEs: {cve.version_specific_cves}")
+                    data_summary.append(f"- Version-specific Critical: {cve.version_specific_critical}")
+                    data_summary.append(f"- Version-specific High: {cve.version_specific_high}")
+                data_summary.append("")
+                
+                # Trust score
+                data_summary.append("Trust Score:")
+                data_summary.append(f"- Score: {trust_score.score}/100")
+                data_summary.append(f"- Risk Level: {trust_score.risk_level}")
+                data_summary.append(f"- Confidence: {trust_score.confidence:.1%}")
+                data_summary.append(f"- Rationale: {trust_score.rationale}")
+                data_summary.append("")
+                
+                # VirusTotal data
+                vt = collected_data.get("virustotal")
+                if vt and vt.get("response_code") == 1:
+                    data_summary.append("VirusTotal Analysis:")
+                    positives = vt.get("positives", 0)
+                    total = vt.get("total", 0)
+                    malicious = vt.get("malicious", 0)
+                    suspicious = vt.get("suspicious", 0)
+                    reputation = vt.get("reputation", 0)
+                    risk_level = vt.get("risk_level", "unknown")
+                    risk_confidence = vt.get("risk_confidence", 0.5)
+                    threat_names = vt.get("threat_names", [])
+                    false_positive_indicators = vt.get("false_positive_indicators", [])
+                    
+                    data_summary.append(f"- Detection: {positives}/{total} engines flagged")
+                    if malicious > 0:
+                        data_summary.append(f"- Malicious detections: {malicious}")
+                    if suspicious > 0:
+                        data_summary.append(f"- Suspicious detections: {suspicious}")
+                    if reputation != 0:
+                        data_summary.append(f"- Reputation score: {reputation}")
+                    if risk_level != "unknown":
+                        data_summary.append(f"- Risk level: {risk_level} ({risk_confidence:.1%} confidence)")
+                    if threat_names:
+                        data_summary.append(f"- Threat names: {', '.join(threat_names[:5])}")
+                    if false_positive_indicators:
+                        data_summary.append(f"- False positive indicators: {', '.join(false_positive_indicators)}")
+                    data_summary.append("")
+                
+                # Vendor page content (truncated)
+                vendor_page = collected_data.get("vendor_page")
+                if vendor_page and vendor_page.get("content"):
+                    content_preview = vendor_page.get("content", "")[:2000]
+                    data_summary.append("Vendor Documentation (excerpt):")
+                    data_summary.append(content_preview)
+                    data_summary.append("")
+                
+                # Terms of service content (truncated)
+                tos = collected_data.get("terms_of_service")
+                if tos and tos.get("content"):
+                    tos_preview = tos.get("content", "")[:1500]
+                    data_summary.append("Terms of Service (excerpt):")
+                    data_summary.append(tos_preview)
+                    data_summary.append("")
+                
+                # Incidents
+                incidents = collected_data.get("incidents", [])
+                if incidents:
+                    data_summary.append(f"Security Incidents: {len(incidents)} documented incidents found")
+                    data_summary.append("")
+                
+                # Citations count
+                data_summary.append(f"Data Sources: {len(security_posture.citations)} citations available")
+                
+                # Build the prompt
+                prompt = f"""You are an experienced Cyber Security/System Administrator with over 20+ years of experience and have the task of assessing if this application should be used and ran on a company laptop or not. Keep the suggestion small and concise.
+
+Based on all the collected data below, provide a recommendation on whether this application should be allowed on company laptops. Consider:
+
+- Security posture and trust score
+- CVE history and active vulnerabilities
+- Vendor reputation and track record
+- Data handling and compliance
+- Deployment controls available
+- VirusTotal analysis results
+- Any documented security incidents
+
+Provide a clear, professional recommendation that balances security concerns with business needs.
+
+Collected Data:
+{chr(10).join(data_summary)}
+
+Write your recommendation:"""
+
+                resp = self.model.generate_content(prompt)
+                result = resp.text.strip()
+                if result and len(result) > 50:  # Ensure we got a substantial response
+                    print(f"[AI Synthesizer] ✓ Generated suggestion using AI")
+                    return result
+            except Exception as e:
+                print(f"[AI Synthesizer] ⚠ Error generating suggestion with AI: {e}")
+        
+        # Fallback suggestion based on trust score
+        risk_level = trust_score.risk_level
+        score = trust_score.score
+        
+        if risk_level == "Critical" or score < 35:
+            return f"Based on the security assessment, {entity_name} by {vendor_name} presents significant security risks (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs, including {security_posture.cve_summary.critical_count} critical vulnerabilities. {security_posture.cve_summary.cisa_kev_count} vulnerabilities are listed in CISA KEV, indicating active exploitation. Recommendation: Do not allow this application on company laptops without additional security controls and management approval."
+        elif risk_level == "High" or score < 55:
+            return f"Based on the security assessment, {entity_name} by {vendor_name} presents elevated security concerns (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs, including {security_posture.cve_summary.critical_count} critical vulnerabilities. Recommendation: Exercise caution when deploying this application on company laptops. Consider implementing additional security controls, ensuring the latest version is used, and obtaining management approval before deployment."
+        elif risk_level == "Medium" or score < 75:
+            return f"Based on the security assessment, {entity_name} by {vendor_name} has a moderate security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs. Recommendation: This application may be acceptable for company laptops with standard security controls in place. Ensure the application is kept up to date and monitor for new security advisories."
+        else:
+            return f"Based on the security assessment, {entity_name} by {vendor_name} demonstrates a relatively good security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs. Recommendation: This application appears suitable for deployment on company laptops with standard security controls and regular updates."

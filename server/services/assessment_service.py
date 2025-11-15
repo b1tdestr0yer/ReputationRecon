@@ -127,7 +127,19 @@ class AssessmentService:
         )
         print(f"[Assessment Service] ✓ Found {len(alternatives)} alternatives")
         
-        # Step 7: Determine data quality
+        # Step 7: Generate suggestion
+        print(f"\n[Assessment Service] Step 7: Generating suggestion...")
+        suggestion = await self.synthesizer.generate_suggestion(
+            entity_name=entity_name,
+            vendor_name=vendor_name,
+            category=category,
+            security_posture=security_posture,
+            trust_score=trust_score,
+            collected_data=collected_data
+        )
+        print(f"[Assessment Service] ✓ Generated suggestion ({len(suggestion)} characters)")
+        
+        # Step 8: Determine data quality
         citation_count = len(security_posture.citations)
         if citation_count >= 5:
             data_quality = "sufficient"
@@ -138,7 +150,7 @@ class AssessmentService:
         print(f"[Assessment Service] Data quality: {data_quality} ({citation_count} citations)")
         
         # Create response
-        print(f"\n[Assessment Service] Step 7: Creating assessment response...")
+        print(f"\n[Assessment Service] Step 8: Creating assessment response...")
         response = AssessmentResponse(
             entity_name=entity_name,
             vendor_name=vendor_name,
@@ -146,6 +158,7 @@ class AssessmentService:
             security_posture=security_posture,
             trust_score=trust_score,
             alternatives=alternatives,
+            suggestion=suggestion,
             data_quality=data_quality
         )
         

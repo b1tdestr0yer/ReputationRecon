@@ -54,6 +54,12 @@ class ExportService:
 
 ---
 
+## Recommendation
+
+{assessment_data.get('suggestion', 'No recommendation available.')}
+
+---
+
 ## CVE Analysis
 
 **Total CVEs:** {cve_summary.get('total_cves', 0)}  
@@ -175,6 +181,11 @@ class ExportService:
     
     <h3>Deployment & Admin Controls</h3>
     <p>{posture.get('deployment_controls', 'N/A')}</p>
+    
+    <h2>Recommendation</h2>
+    <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; border-left: 5px solid #007bff; margin: 20px 0;">
+        <p style="white-space: pre-wrap;">{assessment_data.get('suggestion', 'No recommendation available.')}</p>
+    </div>
     
     <h2>CVE Analysis</h2>
     <table>

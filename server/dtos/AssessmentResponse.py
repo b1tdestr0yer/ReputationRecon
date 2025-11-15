@@ -89,6 +89,7 @@ class AssessmentResponse(BaseModel):
     security_posture: SecurityPosture = Field(..., description="Security posture summary")
     trust_score: TrustScore = Field(..., description="Trust/risk score")
     alternatives: List[Alternative] = Field(default_factory=list, description="Safer alternatives")
+    suggestion: str = Field(..., description="AI-generated suggestion on whether to use this application on a company laptop")
     assessment_timestamp: datetime = Field(default_factory=datetime.now, description="When assessment was performed")
     data_quality: str = Field("sufficient", description="Data quality: sufficient, limited, insufficient")
     cache_key: Optional[str] = Field(None, description="Cache key for this assessment")
