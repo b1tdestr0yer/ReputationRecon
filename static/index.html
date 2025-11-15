@@ -597,6 +597,13 @@
                 </div>
                 
                 <div class="section">
+                    <h3>Recommendation</h3>
+                    <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; border-left: 5px solid #667eea; line-height: 1.6;">
+                        ${data.suggestion ? data.suggestion.split('\n').map(para => para.trim() ? `<p style="margin: 10px 0;">${para}</p>` : '').join('') : '<p>No recommendation available.</p>'}
+                    </div>
+                </div>
+                
+                <div class="section">
                     <h3>CVE Analysis</h3>
                     ${data.security_posture.cve_summary.detected_version ? `
                         <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
