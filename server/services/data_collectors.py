@@ -34,15 +34,19 @@ class DataCollector:
 class CVECollector(DataCollector):
     """Collect CVE data from various sources"""
     
-    async def search_cves(self, product_name: str, vendor_name: str) -> Dict[str, Any]:
+    async def search_cves(self, product_name: str, vendor_name: str, product_version: Optional[str] = None) -> Dict[str, Any]:
         """Search for CVEs related to the product using NVD API"""
-        print(f"[CVE Collector] Searching CVEs for product: {product_name}, vendor: {vendor_name}")
+        print(f"[CVE Collector] Searching CVEs for product: {product_name}, vendor: {vendor_name}, version: {product_version or 'all versions'}")
         results = {
             "total_cves": 0,
             "critical_count": 0,
             "high_count": 0,
             "recent_cves": [],
-            "cisa_kev_count": 0
+            "cisa_kev_count": 0,
+            "version_specific_cves": 0,
+            "version_specific_critical": 0,
+            "version_specific_high": 0,
+            "version_specific_recent": []
         }
         
         try:
@@ -100,17 +104,92 @@ class CVECollector(DataCollector):
                             "published": cve_item.get("published", "")
                         })
             
+            # If version provided, search for version-specific CVEs
+            if product_version:
+                print(f"[CVE Collector] Searching for version-specific CVEs: {product_version}")
+                version_search_terms = [
+                    f"{product_name} {product_version}",
+                    f"{vendor_name} {product_name} {product_version}",
+                    product_version
+                ]
+                
+                for term in version_search_terms:
+                    if not term or term.lower() in ["unknown", "unknown product", "unknown vendor"]:
+                        continue
+                    
+                    url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+                    params = {
+                        "keywordSearch": term,
+                        "resultsPerPage": 20
+                    }
+                    
+                    version_data = await self.fetch(url, params)
+                    if version_data and "vulnerabilities" in version_data:
+                        for vuln in version_data["vulnerabilities"]:
+                            cve_item = vuln.get("cve", {})
+                            cve_id = cve_item.get("id", "")
+                            
+                            # Get CVSS score
+                            metrics = cve_item.get("metrics", {})
+                            cvss_v3 = metrics.get("cvssMetricV31", [])
+                            if not cvss_v3:
+                                cvss_v3 = metrics.get("cvssMetricV30", [])
+                            if not cvss_v3:
+                                cvss_v3 = metrics.get("cvssMetricV2", [])
+                            
+                            base_score = 0.0
+                            if cvss_v3:
+                                base_score = float(cvss_v3[0].get("cvssData", {}).get("baseScore", 0))
+                            
+                            severity = "unknown"
+                            if base_score >= 9.0:
+                                severity = "critical"
+                                results["version_specific_critical"] += 1
+                            elif base_score >= 7.0:
+                                severity = "high"
+                                results["version_specific_high"] += 1
+                            
+                            # Add to version-specific list
+                            version_cve = {
+                                "id": cve_id,
+                                "description": cve_item.get("descriptions", [{}])[0].get("value", ""),
+                                "base_score": base_score,
+                                "severity": severity,
+                                "published": cve_item.get("published", "")
+                            }
+                            
+                            # Check if already in all_cves (avoid double counting in totals)
+                            if not any(c["id"] == cve_id for c in all_cves):
+                                all_cves.append(version_cve)
+                                if severity == "critical":
+                                    results["critical_count"] += 1
+                                elif severity == "high":
+                                    results["high_count"] += 1
+            
             # Remove duplicates
             seen = set()
             unique_cves = []
+            version_specific_cves = []
+            
             for cve in all_cves:
                 if cve["id"] not in seen:
                     seen.add(cve["id"])
                     unique_cves.append(cve)
+                    
+                    # Check if this CVE is version-specific (appears in version search results)
+                    if product_version:
+                        cve_desc = cve.get("description", "").lower()
+                        version_lower = product_version.lower()
+                        # Check if version appears in description
+                        if version_lower in cve_desc:
+                            version_specific_cves.append(cve)
             
             results["total_cves"] = len(unique_cves)
             results["recent_cves"] = sorted(unique_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
-            print(f"[CVE Collector] CVE search complete: {results['total_cves']} total CVEs, {results['critical_count']} critical, {results['high_count']} high")
+            results["version_specific_cves"] = len(version_specific_cves)
+            results["version_specific_recent"] = sorted(version_specific_cves, key=lambda x: x.get("published", ""), reverse=True)[:10]
+            
+            print(f"[CVE Collector] CVE search complete: {results['total_cves']} total CVEs ({results['version_specific_cves']} version-specific), {results['critical_count']} critical ({results['version_specific_critical']} version-specific), {results['high_count']} high ({results['version_specific_high']} version-specific)")
             
         except Exception as e:
             print(f"[CVE Collector] ERROR searching CVEs: {e}")
@@ -269,6 +348,70 @@ class VirusTotalCollector(DataCollector):
             print(f"[VirusTotal Collector] ✗ Failed to retrieve report")
         
         return data
+
+
+class CIRCLHashlookupCollector(DataCollector):
+    """Collect version information from CIRCL hashlookup"""
+    
+    async def get_file_info(self, hash: str) -> Optional[Dict]:
+        """Get file information including version from CIRCL hashlookup"""
+        print(f"[CIRCL Hashlookup] Fetching file info for hash: {hash[:16]}...")
+        
+        # Determine hash type and normalize
+        hash_upper = hash.upper().strip()
+        hash_type = None
+        
+        if len(hash_upper) == 32:
+            hash_type = "md5"
+        elif len(hash_upper) == 40:
+            hash_type = "sha1"
+        elif len(hash_upper) == 64:
+            hash_type = "sha256"
+        else:
+            print(f"[CIRCL Hashlookup] ✗ Unsupported hash length: {len(hash_upper)}")
+            return None
+        
+        url = f"https://hashlookup.circl.lu/lookup/{hash_type}/{hash_upper}"
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"[CIRCL Hashlookup] ✓ File info retrieved")
+                    
+                    # Extract version information
+                    version_info = {
+                        "found": True,
+                        "filename": data.get("FileName", ""),
+                        "filesize": data.get("FileSize", ""),
+                        "product_name": "",
+                        "product_version": "",
+                        "source": data.get("source", ""),
+                        "trust": data.get("hashlookup:trust", 50)
+                    }
+                    
+                    # Extract product information
+                    product_code = data.get("ProductCode", {})
+                    if product_code:
+                        version_info["product_name"] = product_code.get("ProductName", "")
+                        version_info["product_version"] = product_code.get("ProductVersion", "")
+                    
+                    if version_info["product_name"] or version_info["product_version"]:
+                        print(f"[CIRCL Hashlookup] ✓ Found product: {version_info['product_name']} version {version_info['product_version']}")
+                    else:
+                        print(f"[CIRCL Hashlookup] ⚠ No product version information found")
+                    
+                    return version_info
+                elif response.status_code == 404:
+                    print(f"[CIRCL Hashlookup] Hash not found in database")
+                    return None
+                else:
+                    print(f"[CIRCL Hashlookup] ✗ API returned status {response.status_code}")
+                    return None
+        except Exception as e:
+            print(f"[CIRCL Hashlookup] ✗ Error fetching file info: {e}")
+            return None
 
 
 class WebSearchCollector(DataCollector):

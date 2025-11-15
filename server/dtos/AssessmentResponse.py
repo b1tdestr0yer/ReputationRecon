@@ -36,6 +36,11 @@ class CVESummary(BaseModel):
     recent_trend: str = Field("unknown", description="Trend: increasing, decreasing, stable")
     cisa_kev_count: int = Field(0, description="Number of CVEs in CISA KEV catalog")
     recent_cves: List[Dict[str, Any]] = Field(default_factory=list, description="Recent CVE details")
+    version_specific_cves: int = Field(0, description="Number of CVEs specific to detected version")
+    version_specific_critical: int = Field(0, description="Number of critical CVEs for detected version")
+    version_specific_high: int = Field(0, description="Number of high CVEs for detected version")
+    version_specific_recent: List[Dict[str, Any]] = Field(default_factory=list, description="Recent version-specific CVEs")
+    detected_version: Optional[str] = Field(None, description="Product version detected from hash")
 
 
 class TrustScore(BaseModel):

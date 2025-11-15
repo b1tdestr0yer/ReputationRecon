@@ -4,7 +4,7 @@ from server.dtos.AssessmentResponse import AssessmentResponse, SoftwareCategory
 from server.services.cache import AssessmentCache
 from server.services.data_collectors import (
     CVECollector, VendorPageCollector, VirusTotalCollector,
-    WebSearchCollector, EntityResolver
+    WebSearchCollector, EntityResolver, CIRCLHashlookupCollector
 )
 from server.services.classifier import SoftwareClassifier
 from server.services.ai_synthesizer import AISynthesizer
@@ -19,6 +19,7 @@ class AssessmentService:
         self.cve_collector = CVECollector()
         self.vendor_collector = VendorPageCollector()
         self.vt_collector = VirusTotalCollector()
+        self.hashlookup_collector = CIRCLHashlookupCollector()
         self.web_collector = WebSearchCollector()
         self.entity_resolver = EntityResolver()
         self.classifier = SoftwareClassifier()
@@ -78,11 +79,18 @@ class AssessmentService:
             hash=request.hash
         )
         print(f"[Assessment Service] ✓ Data collection complete")
-        print(f"  - CVEs: {collected_data.get('cves', {}).get('total_cves', 0)}")
+        cve_data = collected_data.get('cves', {})
+        print(f"  - CVEs: {cve_data.get('total_cves', 0)} (version-specific: {cve_data.get('version_specific_cves', 0)})")
         print(f"  - CISA KEV: {len(collected_data.get('cisa_kev', []))}")
         print(f"  - Vendor page: {'✓' if collected_data.get('vendor_page') else '✗'}")
         print(f"  - Terms of Service: {'✓' if collected_data.get('terms_of_service') else '✗'}")
         print(f"  - VirusTotal: {'✓' if collected_data.get('virustotal') else '✗'}")
+        hashlookup_info = collected_data.get('hashlookup')
+        if hashlookup_info and hashlookup_info.get('found'):
+            version = hashlookup_info.get('product_version', 'unknown')
+            print(f"  - CIRCL Hashlookup: ✓ (Version: {version})")
+        else:
+            print(f"  - CIRCL Hashlookup: ✗")
         
         # Step 4: Synthesize security posture
         print(f"\n[Assessment Service] Step 4: Synthesizing security posture...")
@@ -203,6 +211,14 @@ class AssessmentService:
             print(f"  → Skipping VirusTotal (no hash provided)")
             tasks.append(noop())
         
+        # CIRCL Hashlookup (if hash provided) - for version detection
+        if hash:
+            print(f"  → Queueing CIRCL Hashlookup lookup...")
+            tasks.append(self.hashlookup_collector.get_file_info(hash))
+        else:
+            print(f"  → Skipping CIRCL Hashlookup (no hash provided)")
+            tasks.append(noop())
+        
         # Web search for incidents
         print(f"  → Queueing incident search...")
         tasks.append(self.web_collector.search_incidents(entity_name, vendor_name))
@@ -218,7 +234,21 @@ class AssessmentService:
         vendor_page = results[2] if not isinstance(results[2], Exception) else None
         tos = results[3] if not isinstance(results[3], Exception) else None
         vt_report = results[4] if not isinstance(results[4], Exception) else None
-        incidents = results[5] if not isinstance(results[5], Exception) else []
+        hashlookup_info = results[5] if not isinstance(results[5], Exception) else None
+        incidents = results[6] if not isinstance(results[6], Exception) else []
+        
+        # If hashlookup found version info, search for version-specific CVEs
+        product_version = None
+        if hashlookup_info and hashlookup_info.get("found"):
+            product_version = hashlookup_info.get("product_version")
+            if product_version:
+                print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
+                print(f"[Assessment Service] Searching for version-specific CVEs...")
+                version_cve_data = await self.cve_collector.search_cves(
+                    entity_name, vendor_name, product_version
+                )
+                # Merge version-specific data into CVE results
+                cve_data.update(version_cve_data)
         
         return {
             "cves": cve_data,
@@ -226,7 +256,9 @@ class AssessmentService:
             "vendor_page": vendor_page,
             "terms_of_service": tos,
             "virustotal": vt_report,
-            "incidents": incidents
+            "hashlookup": hashlookup_info,
+            "incidents": incidents,
+            "hash": hash  # Store hash for building URLs in citations
         }
     
     async def compare(self, requests: list[AssessmentRequest]) -> Dict[str, Any]:

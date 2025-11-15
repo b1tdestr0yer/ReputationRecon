@@ -53,9 +53,13 @@ class AISynthesizer:
         """Synthesize security posture from collected data"""
         print(f"[AI Synthesizer] Synthesizing security posture for {entity_name} ({vendor_name})")
         
-        # Add entity/vendor names to collected_data for use in extraction methods
+        # Add entity/vendor names and hash to collected_data for use in extraction methods
         collected_data["entity_name"] = entity_name
         collected_data["vendor_name"] = vendor_name
+        # Store hash if available for building URLs
+        if "hash" not in collected_data:
+            # Try to get hash from request if available
+            collected_data["hash"] = collected_data.get("hash", "")
         
         # Extract information from collected data
         print(f"[AI Synthesizer] Extracting description...")
@@ -252,13 +256,21 @@ Write the vendor reputation summary:"""
     def _extract_cve_summary(self, data: Dict) -> CVESummary:
         cves = data.get("cves") or {}
         kev = data.get("cisa_kev") or []
+        hashlookup = data.get("hashlookup") or {}
+        detected_version = hashlookup.get("product_version") if hashlookup else None
+        
         return CVESummary(
             total_cves=cves.get("total_cves", 0) if cves else 0,
             critical_count=cves.get("critical_count", 0) if cves else 0,
             high_count=cves.get("high_count", 0) if cves else 0,
             recent_trend="unknown",
             cisa_kev_count=len(kev) if kev else 0,
-            recent_cves=cves.get("recent_cves", []) if cves else []
+            recent_cves=cves.get("recent_cves", []) if cves else [],
+            version_specific_cves=cves.get("version_specific_cves", 0) if cves else 0,
+            version_specific_critical=cves.get("version_specific_critical", 0) if cves else 0,
+            version_specific_high=cves.get("version_specific_high", 0) if cves else 0,
+            version_specific_recent=cves.get("version_specific_recent", []) if cves else [],
+            detected_version=detected_version
         )
 
 
@@ -448,38 +460,63 @@ Vendor text:
                 timestamp=datetime.now()
             ))
 
-        # Add CVE citations
+        # Add CVE citations with proper URLs
         cves = data.get("cves") or {}
+        entity_name = data.get("entity_name", "")
         if cves and cves.get("total_cves", 0) > 0:
+            # Build NVD search URL
+            search_query = entity_name.replace(" ", "+") if entity_name else ""
+            nvd_url = f"https://nvd.nist.gov/vuln/search/results?query={search_query}&results_type=overview" if search_query else "https://nvd.nist.gov/vuln/search"
             cites.append(Citation(
-                source="NVD (National Vulnerability Database)",
+                source=nvd_url,
                 source_type="CVE",
-                claim=f"{cves.get('total_cves', 0)} CVE(s) found",
+                claim=f"{cves.get('total_cves', 0)} CVE(s) found in NVD (National Vulnerability Database)",
                 is_vendor_stated=False,
                 timestamp=datetime.now()
             ))
 
-        # Add CISA KEV citations
+        # Add CISA KEV citations with proper URLs
         kev_list = data.get("cisa_kev") or []
         for kev in kev_list:
             if kev and kev.get("cveID"):
+                cve_id = kev.get("cveID", "")
+                # Link to CISA KEV catalog and specific CVE in NVD
+                cisa_url = "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
+                nvd_cve_url = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
                 cites.append(Citation(
-                    source="CISA KEV (Known Exploited Vulnerabilities)",
+                    source=nvd_cve_url,
                     source_type="CISA",
-                    claim=f"KEV Entry: {kev.get('cveID', 'Unknown')}",
+                    claim=f"KEV Entry: {cve_id} (CISA Known Exploited Vulnerabilities)",
                     is_vendor_stated=False,
                     timestamp=datetime.now()
                 ))
 
-        # Add VirusTotal citation if available
+        # Add VirusTotal citation with proper URL
         vt = data.get("virustotal")
+        hash_value = data.get("hash", "")
+        # Try to get hash from VirusTotal response if not in data
+        if vt and not hash_value:
+            hash_value = vt.get("sha256") or vt.get("sha1") or vt.get("md5") or ""
+        
         if vt and vt.get("response_code") == 1:
             positives = vt.get("positives", 0)
             total = vt.get("total", 0)
+            # Build VirusTotal report URL using the hash
+            if hash_value:
+                # Determine hash type and build URL
+                hash_upper = hash_value.upper().strip()
+                # VirusTotal accepts SHA256, SHA1, or MD5 in the URL
+                if len(hash_upper) in [32, 40, 64]:
+                    vt_url = f"https://www.virustotal.com/gui/file/{hash_upper}"
+                else:
+                    vt_url = "https://www.virustotal.com"
+            else:
+                vt_url = "https://www.virustotal.com"
+            
             cites.append(Citation(
-                source="VirusTotal",
+                source=vt_url,
                 source_type="independent",
-                claim=f"File analysis: {positives}/{total} vendors flagged",
+                claim=f"VirusTotal file analysis: {positives}/{total} vendors flagged",
                 is_vendor_stated=False,
                 timestamp=datetime.now()
             ))
@@ -501,36 +538,71 @@ Vendor text:
         cve = security_posture.cve_summary
         vt = collected_data.get("virustotal")
 
-        # CVE impact (negative factors)
+        # Version-specific CVEs are weighted more heavily (more relevant to current version)
+        if cve.detected_version and cve.version_specific_cves > 0:
+            # Version-specific CVEs have higher impact
+            if cve.version_specific_cves > 20:
+                score -= 30
+                factors["high_version_cve_count"] = -30
+            elif cve.version_specific_cves > 10:
+                score -= 20
+                factors["moderate_version_cve_count"] = -20
+            elif cve.version_specific_cves > 5:
+                score -= 12
+                factors["some_version_cves"] = -12
+            else:
+                score -= 6
+                factors["few_version_cves"] = -6
+            
+            # Version-specific critical CVEs are very concerning
+            if cve.version_specific_critical > 5:
+                score -= 25
+                factors["many_version_critical_cves"] = -25
+            elif cve.version_specific_critical > 0:
+                score -= 15
+                factors["version_critical_cves"] = -15
+            
+            # Version-specific high CVEs
+            if cve.version_specific_high > 10:
+                score -= 15
+                factors["many_version_high_cves"] = -15
+            elif cve.version_specific_high > 0:
+                score -= 8
+                factors["version_high_cves"] = -8
+        
+        # Total CVE impact (less weight than version-specific, but still important)
         if cve.total_cves > 50:
-            score -= 25
-            factors["high_cve_count"] = -25
+            score -= 20
+            factors["high_cve_count"] = -20
         elif cve.total_cves > 20:
-            score -= 15
-            factors["moderate_cve_count"] = -15
+            score -= 12
+            factors["moderate_cve_count"] = -12
         elif cve.total_cves > 5:
-            score -= 8
-            factors["some_cves"] = -8
+            score -= 6
+            factors["some_cves"] = -6
         elif cve.total_cves > 0:
-            score -= 3
-            factors["few_cves"] = -3
+            score -= 2
+            factors["few_cves"] = -2
         else:
             # No CVEs is actually positive (but don't over-weight it)
-            factors["no_cves"] = +5
-            score += 5
+            if not (cve.detected_version and cve.version_specific_cves > 0):
+                factors["no_cves"] = +5
+                score += 5
 
         # CISA KEV is very serious
         if cve.cisa_kev_count > 0:
             score -= 35
             factors["cisa_kev"] = -35
 
-        # Critical CVEs are concerning
+        # Total critical CVEs (less weight if we have version-specific data)
         if cve.critical_count > 5:
-            score -= 20
-            factors["many_critical_cves"] = -20
+            if not (cve.detected_version and cve.version_specific_critical > 0):
+                score -= 15
+                factors["many_critical_cves"] = -15
         elif cve.critical_count > 0:
-            score -= 10
-            factors["critical_cves"] = -10
+            if not (cve.detected_version and cve.version_specific_critical > 0):
+                score -= 8
+                factors["critical_cves"] = -8
 
         # VirusTotal analysis
         if vt and vt.get("response_code") == 1:

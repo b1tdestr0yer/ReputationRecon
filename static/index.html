@@ -507,7 +507,14 @@
                 
                 <div class="section">
                     <h3>CVE Analysis</h3>
-                    <p><strong>Total CVEs:</strong> ${data.security_posture.cve_summary.total_cves}</p>
+                    ${data.security_posture.cve_summary.detected_version ? `
+                        <p><strong>Detected Version:</strong> ${data.security_posture.cve_summary.detected_version}</p>
+                        <p><strong>Version-Specific CVEs:</strong> ${data.security_posture.cve_summary.version_specific_cves || 0} 
+                           (Critical: ${data.security_posture.cve_summary.version_specific_critical || 0}, 
+                           High: ${data.security_posture.cve_summary.version_specific_high || 0})</p>
+                        <hr style="margin: 15px 0;">
+                    ` : ''}
+                    <p><strong>Total CVEs (All Versions):</strong> ${data.security_posture.cve_summary.total_cves}</p>
                     <p><strong>Critical:</strong> ${data.security_posture.cve_summary.critical_count} | <strong>High:</strong> ${data.security_posture.cve_summary.high_count}</p>
                     <p><strong>CISA KEV Entries:</strong> ${data.security_posture.cve_summary.cisa_kev_count}</p>
                     
@@ -549,10 +556,13 @@
                         <ul>
                             ${data.security_posture.citations.map(citation => {
                                 const sourceClass = citation.is_vendor_stated ? 'vendor' : 'independent';
+                                // Check if source is a URL (starts with http)
+                                const isUrl = citation.source && citation.source.startsWith('http');
+                                const displayText = isUrl ? citation.source : `${citation.source_type}: ${citation.source}`;
                                 return `
                                 <li class="source-item ${sourceClass}">
                                     <strong>${citation.source_type}</strong> ${citation.is_vendor_stated ? '(Vendor-stated)' : '(Independent)'}<br>
-                                    <a href="${citation.source}" target="_blank">${citation.source}</a><br>
+                                    ${isUrl ? `<a href="${citation.source}" target="_blank" rel="noopener noreferrer">${displayText}</a>` : `<span>${displayText}</span>`}<br>
                                     <em>${citation.claim}</em>
                                 </li>
                                 `;
