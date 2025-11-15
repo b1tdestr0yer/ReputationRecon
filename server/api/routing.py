@@ -19,13 +19,19 @@ router = APIRouter()
 
 limiter = Limiter(key_func=get_remote_address)
 
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint to verify routing is working"""
+    return {"status": "ok", "message": "API router is working"}
+
 # Initialize assessment service
 assessment_service = AssessmentService()
 
 
 
 @router.post(
-    "/api/",
+    "/",
     summary="",
     description="""
 """,
@@ -44,7 +50,7 @@ async def ask_sth(payload: AppDetails, request: Request) -> JSONResponse:
 
 
 @router.get(
-    "/api/virustotal/{hash}",
+    "/virustotal/{hash}",
     summary="Search VirusTotal by hash",
     description="""
     Search VirusTotal for information about a file hash (MD5, SHA1, or SHA256).
@@ -146,7 +152,7 @@ async def virustotal_search(hash: str, request: Request) -> JSONResponse:
 
 
 @router.post(
-    "/api/assess",
+    "/assess",
     summary="Assess application security posture",
     description="""
     Perform a comprehensive security assessment of an application.
@@ -223,7 +229,7 @@ async def assess_application(
 
 
 @router.post(
-    "/api/compare",
+    "/compare",
     summary="Compare multiple applications",
     description="""
     Compare security postures of multiple applications side-by-side.
@@ -298,7 +304,7 @@ async def compare_applications(requests: List[AssessmentRequest], request: Reque
 
 
 @router.get(
-    "/api/config/status",
+    "/config/status",
     summary="Get configuration status",
     description="Check which API keys are configured",
     responses={
@@ -312,7 +318,7 @@ async def get_config_status() -> JSONResponse:
 
 
 @router.post(
-    "/api/export/{format}",
+    "/export/{format}",
     summary="Export assessment report",
     description="Export assessment to Markdown or PDF format",
     responses={

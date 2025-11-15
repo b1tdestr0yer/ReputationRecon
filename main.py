@@ -32,8 +32,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# Include router
-app.include_router(router)
+# Include router with /api prefix
+app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():
