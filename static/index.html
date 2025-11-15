@@ -22,17 +22,17 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="product">Product Name</label>
-                    <input type="text" id="product" placeholder="e.g., Slack">
+                    <input type="text" id="product" placeholder="e.g., Slack" maxlength="128">
                 </div>
                 <div class="form-group">
                     <label for="vendor">Vendor Name</label>
-                    <input type="text" id="vendor" placeholder="e.g., Salesforce">
+                    <input type="text" id="vendor" placeholder="e.g., Salesforce" maxlength="128">
                 </div>
             </div>
             
             <div class="form-group">
                 <label for="hash">Hash (optional)</label>
-                <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256">
+                <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256" maxlength="128">
             </div>
             
             <button type="button" onclick="assessApplication()"><i class="fas fa-search"></i> Assess Application</button>
@@ -45,21 +45,21 @@
                 <div class="form-row compare-item">
                     <div class="form-group">
                         <label>Product 1</label>
-                        <input type="text" class="compare-product" placeholder="Product name">
+                        <input type="text" class="compare-product" placeholder="Product name" maxlength="128">
                     </div>
                     <div class="form-group">
                         <label>Vendor 1</label>
-                        <input type="text" class="compare-vendor" placeholder="Vendor name">
+                        <input type="text" class="compare-vendor" placeholder="Vendor name" maxlength="128">
                     </div>
                 </div>
                 <div class="form-row compare-item">
                     <div class="form-group">
                         <label>Product 2</label>
-                        <input type="text" class="compare-product" placeholder="Product name">
+                        <input type="text" class="compare-product" placeholder="Product name" maxlength="128">
                     </div>
                     <div class="form-group">
                         <label>Vendor 2</label>
-                        <input type="text" class="compare-vendor" placeholder="Vendor name">
+                        <input type="text" class="compare-vendor" placeholder="Vendor name" maxlength="128">
                     </div>
                 </div>
             </div>
@@ -104,6 +104,222 @@
         let currentAssessmentData = null;
         let loadingStepInterval = null;
         
+        // CVE Pagination functionality - global scope
+        let currentCVEPage = 1;
+        const itemsPerPage = 10;
+        let allCVEs = [];
+        
+        function initializeCVEPagination(cves) {
+            console.log('initializeCVEPagination called with', cves?.length, 'CVEs');
+            if (!cves || cves.length === 0) {
+                console.log('No CVEs to paginate');
+                return;
+            }
+            
+            allCVEs = cves;
+            currentCVEPage = 1;
+            
+            // Check if elements exist
+            const tbody = document.getElementById('cveTableBody');
+            const infoDiv = document.getElementById('cvePaginationInfo');
+            const paginationDiv = document.getElementById('cvePagination');
+            
+            console.log('Elements found:', { tbody: !!tbody, infoDiv: !!infoDiv, paginationDiv: !!paginationDiv });
+            
+            if (!tbody || !infoDiv || !paginationDiv) {
+                console.error('CVE pagination elements not found');
+                return;
+            }
+            
+            renderCVEPage(1);
+            renderCVEPagination();
+            console.log('Pagination initialized, total pages:', Math.ceil(allCVEs.length / itemsPerPage));
+        }
+        
+        function renderCVEPage(page) {
+            const tbody = document.getElementById('cveTableBody');
+            const infoDiv = document.getElementById('cvePaginationInfo');
+            
+            if (!tbody || !infoDiv) return;
+            
+            const startIndex = (page - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, allCVEs.length);
+            const pageCVEs = allCVEs.slice(startIndex, endIndex);
+            
+            // Update info
+            infoDiv.textContent = `Showing ${startIndex + 1}-${endIndex} of ${allCVEs.length}`;
+            
+            // Render table rows
+            tbody.innerHTML = pageCVEs.map(cve => {
+                const severityClass = cve.severity === 'critical' ? 'cve-critical' : cve.severity === 'high' ? 'cve-high' : '';
+                return `
+                    <tr>
+                        <td><a href="https://nvd.nist.gov/vuln/detail/${cve.id}" target="_blank" style="color: #667eea; text-decoration: none;">${cve.id}</a></td>
+                        <td class="${severityClass}">${cve.severity.toUpperCase()}</td>
+                        <td>${cve.base_score || 'N/A'}</td>
+                        <td>${cve.published ? new Date(cve.published).toLocaleDateString() : 'N/A'}</td>
+                        <td>${cve.description ? (cve.description.length > 150 ? cve.description.substring(0, 150) + '...' : cve.description) : 'N/A'}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            currentCVEPage = page;
+        }
+        
+        function renderCVEPagination() {
+            const paginationDiv = document.getElementById('cvePagination');
+            if (!paginationDiv) return;
+            
+            const totalPages = Math.ceil(allCVEs.length / itemsPerPage);
+            
+            console.log('renderCVEPagination: totalPages =', totalPages, 'currentCVEPage =', currentCVEPage);
+            
+            if (totalPages <= 1) {
+                paginationDiv.innerHTML = '';
+                console.log('Only 1 page or less, hiding pagination');
+                return;
+            }
+            
+            let html = '';
+            
+            // Previous button
+            const prevDisabled = currentCVEPage === 1;
+            html += `
+                <button ${prevDisabled ? 'disabled' : ''} 
+                        class="cve-pagination-btn" 
+                        data-page="${currentCVEPage - 1}"
+                        style="background: ${prevDisabled ? '#e0e0e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}; 
+                               color: ${prevDisabled ? '#999' : 'white'}; 
+                               border: none; 
+                               padding: 8px 16px; 
+                               border-radius: 6px; 
+                               font-size: 0.9em; 
+                               font-weight: 600; 
+                               cursor: ${prevDisabled ? 'not-allowed' : 'pointer'}; 
+                               transition: all 0.2s ease;
+                               display: inline-flex;
+                               align-items: center;
+                               gap: 6px;"
+                        ${!prevDisabled ? `onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(102, 126, 234, 0.3)';"` : ''}
+                        ${!prevDisabled ? `onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"` : ''}>
+                    <i class="fas fa-chevron-left"></i>
+                    Previous
+                </button>
+            `;
+            
+            // Page numbers
+            const maxVisiblePages = 7;
+            let startPage = Math.max(1, currentCVEPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            // First page
+            if (startPage > 1) {
+                html += `
+                    <button class="cve-pagination-btn" data-page="1" style="background: white; color: #667eea; border: 2px solid #667eea; padding: 8px 12px; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0';" onmouseout="this.style.background='white';">1</button>
+                `;
+                if (startPage > 2) {
+                    html += `<span style="color: #999; padding: 0 8px;">...</span>`;
+                }
+            }
+            
+            // Page number buttons
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === currentCVEPage;
+                html += `
+                    <button class="cve-pagination-btn" 
+                            data-page="${i}"
+                            style="background: ${isActive ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white'}; 
+                                   color: ${isActive ? 'white' : '#667eea'}; 
+                                   border: 2px solid ${isActive ? 'transparent' : '#667eea'}; 
+                                   padding: 8px 12px; 
+                                   border-radius: 6px; 
+                                   font-size: 0.9em; 
+                                   font-weight: ${isActive ? '700' : '600'}; 
+                                   cursor: pointer; 
+                                   transition: all 0.2s ease;
+                                   min-width: 40px;"
+                            ${!isActive ? `onmouseover="this.style.background='#f0f0f0';"` : ''}
+                            ${!isActive ? `onmouseout="this.style.background='white';"` : ''}>
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            // Last page
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<span style="color: #999; padding: 0 8px;">...</span>`;
+                }
+                html += `
+                    <button class="cve-pagination-btn" data-page="${totalPages}" style="background: white; color: #667eea; border: 2px solid #667eea; padding: 8px 12px; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0';" onmouseout="this.style.background='white';">${totalPages}</button>
+                `;
+            }
+            
+            // Next button
+            const nextDisabled = currentCVEPage === totalPages;
+            html += `
+                <button ${nextDisabled ? 'disabled' : ''} 
+                        class="cve-pagination-btn" 
+                        data-page="${currentCVEPage + 1}"
+                        style="background: ${nextDisabled ? '#e0e0e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}; 
+                               color: ${nextDisabled ? '#999' : 'white'}; 
+                               border: none; 
+                               padding: 8px 16px; 
+                               border-radius: 6px; 
+                               font-size: 0.9em; 
+                               font-weight: 600; 
+                               cursor: ${nextDisabled ? 'not-allowed' : 'pointer'}; 
+                               transition: all 0.2s ease;
+                               display: inline-flex;
+                               align-items: center;
+                               gap: 6px;"
+                        ${!nextDisabled ? `onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(102, 126, 234, 0.3)';"` : ''}
+                        ${!nextDisabled ? `onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"` : ''}>
+                    Next
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+            
+            paginationDiv.innerHTML = html;
+            
+            // Attach event listeners to all pagination buttons using data-page attribute
+            const buttons = paginationDiv.querySelectorAll('.cve-pagination-btn:not([disabled])');
+            buttons.forEach(button => {
+                const page = button.getAttribute('data-page');
+                if (page) {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const pageNum = parseInt(page);
+                        console.log('Button clicked, navigating to page:', pageNum);
+                        goToCVEPage(pageNum);
+                    });
+                }
+            });
+        }
+        
+        function goToCVEPage(page) {
+            console.log('goToCVEPage called with page:', page, 'allCVEs.length:', allCVEs.length);
+            const totalPages = Math.ceil(allCVEs.length / itemsPerPage);
+            if (page < 1 || page > totalPages) {
+                console.log('Invalid page:', page, 'totalPages:', totalPages);
+                return;
+            }
+            
+            renderCVEPage(page);
+            renderCVEPagination();
+            
+            // Scroll to top of table
+            const tableContainer = document.getElementById('cveTableContainer');
+            if (tableContainer) {
+                tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        
         function startLoadingAnimation() {
             const steps = document.querySelectorAll('.loading-step');
             let currentStep = 0;
@@ -143,11 +359,11 @@
             div.innerHTML = `
                 <div class="form-group">
                     <label>Product ${count}</label>
-                    <input type="text" class="compare-product" placeholder="Product name">
+                    <input type="text" class="compare-product" placeholder="Product name" maxlength="128">
                 </div>
                 <div class="form-group">
                     <label>Vendor ${count}</label>
-                    <input type="text" class="compare-vendor" placeholder="Vendor name">
+                    <input type="text" class="compare-vendor" placeholder="Vendor name" maxlength="128">
                 </div>
             `;
             container.appendChild(div);
@@ -155,11 +371,25 @@
         
         async function assessApplication(forceRefresh = false) {
             console.log('assessApplication() called', { forceRefresh });
-            const product = document.getElementById('product').value;
-            const vendor = document.getElementById('vendor').value;
-            const hash = document.getElementById('hash').value;
+            const product = document.getElementById('product').value.trim();
+            const vendor = document.getElementById('vendor').value.trim();
+            const hash = document.getElementById('hash').value.trim();
             
             console.log('Form values:', { product, vendor, hash });
+            
+            // Validate input lengths
+            if (product && product.length > 128) {
+                alert('Product name must be 128 characters or less');
+                return;
+            }
+            if (vendor && vendor.length > 128) {
+                alert('Vendor name must be 128 characters or less');
+                return;
+            }
+            if (hash && hash.length > 128) {
+                alert('Hash must be 128 characters or less');
+                return;
+            }
             
             if (!product && !vendor) {
                 alert('Please provide at least one of: product name or vendor name');
@@ -221,8 +451,19 @@
             const requests = [];
             
             for (const item of items) {
-                const product = item.querySelector('.compare-product').value;
-                const vendor = item.querySelector('.compare-vendor').value;
+                const product = item.querySelector('.compare-product').value.trim();
+                const vendor = item.querySelector('.compare-vendor').value.trim();
+                
+                // Validate input lengths
+                if (product && product.length > 128) {
+                    alert('Product name must be 128 characters or less');
+                    return;
+                }
+                if (vendor && vendor.length > 128) {
+                    alert('Vendor name must be 128 characters or less');
+                    return;
+                }
+                
                 if (product || vendor) {
                     requests.push({
                         product_name: product || null,
@@ -626,33 +867,30 @@
                     </div>
                     
                     ${data.security_posture.cve_summary.recent_cves && data.security_posture.cve_summary.recent_cves.length > 0 ? `
-                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Detailed CVE List ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `(Showing ${data.security_posture.cve_summary.recent_cves.length} of ${data.security_posture.cve_summary.total_cves} total)` : ''}</h4>
-                    <table class="cve-table">
-                        <thead>
-                            <tr>
-                                <th>CVE ID</th>
-                                <th>Severity</th>
-                                <th>CVSS Score</th>
-                                <th>Published</th>
-                                <th>Description</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.security_posture.cve_summary.recent_cves.map(cve => {
-                                const severityClass = cve.severity === 'critical' ? 'cve-critical' : cve.severity === 'high' ? 'cve-high' : '';
-                                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                        <h4 style="margin: 0;">Detailed CVE List ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `(Showing ${data.security_posture.cve_summary.recent_cves.length} of ${data.security_posture.cve_summary.total_cves} total)` : `(${data.security_posture.cve_summary.recent_cves.length} total)`}</h4>
+                        <div id="cvePaginationInfo" style="color: #666; font-size: 0.9em; font-weight: 500;"></div>
+                    </div>
+                    <div id="cveTableContainer">
+                        <table class="cve-table" id="cveTable">
+                            <thead>
                                 <tr>
-                                    <td><a href="https://nvd.nist.gov/vuln/detail/${cve.id}" target="_blank" style="color: #667eea; text-decoration: none;">${cve.id}</a></td>
-                                    <td class="${severityClass}">${cve.severity.toUpperCase()}</td>
-                                    <td>${cve.base_score || 'N/A'}</td>
-                                    <td>${cve.published ? new Date(cve.published).toLocaleDateString() : 'N/A'}</td>
-                                    <td>${cve.description ? (cve.description.length > 150 ? cve.description.substring(0, 150) + '...' : cve.description) : 'N/A'}</td>
+                                    <th>CVE ID</th>
+                                    <th>Severity</th>
+                                    <th>CVSS Score</th>
+                                    <th>Published</th>
+                                    <th>Description</th>
                                 </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                    ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `<p style="color: #666; font-style: italic; margin-top: 10px;">Note: Only the most recent ${data.security_posture.cve_summary.recent_cves.length} CVEs are shown. <a href="https://nvd.nist.gov/vuln/search/results?query=${encodeURIComponent(data.entity_name || '')}" target="_blank">View all ${data.security_posture.cve_summary.total_cves} CVEs on NVD</a></p>` : ''}
+                            </thead>
+                            <tbody id="cveTableBody">
+                                <!-- CVE rows will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="cvePagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                        <!-- Pagination controls will be populated by JavaScript -->
+                    </div>
+                    ${data.security_posture.cve_summary.recent_cves.length < data.security_posture.cve_summary.total_cves ? `<p style="color: #666; font-style: italic; margin-top: 10px;">Note: Only the most recent ${data.security_posture.cve_summary.recent_cves.length} CVEs are shown.</p>` : ''}
                     ` : '<p style="color: #666; font-style: italic;">No CVEs found in the database.</p>'}
                 </div>
                 
@@ -899,6 +1137,13 @@
             
             // Render spider chart
             renderSpiderChart(data);
+            
+            // Initialize CVE pagination - use setTimeout to ensure DOM is ready
+            if (data.security_posture?.cve_summary?.recent_cves && data.security_posture.cve_summary.recent_cves.length > 0) {
+                setTimeout(() => {
+                    initializeCVEPagination(data.security_posture.cve_summary.recent_cves);
+                }, 100);
+            }
             
             // Add refresh button animation - continuous spin on click
             const refreshBtn = document.getElementById('refreshBtn');

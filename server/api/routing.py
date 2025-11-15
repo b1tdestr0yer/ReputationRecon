@@ -178,6 +178,28 @@ async def assess_application(
     print(f"[API] Request data: {assessment_request.model_dump()}")
     print(f"[API] Force refresh: {force_refresh}")
     
+    # Validate input lengths
+    if assessment_request.product_name and len(assessment_request.product_name) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="product_name must be 128 characters or less"
+        )
+    if assessment_request.vendor_name and len(assessment_request.vendor_name) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="vendor_name must be 128 characters or less"
+        )
+    if assessment_request.url and len(assessment_request.url) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="url must be 128 characters or less"
+        )
+    if assessment_request.hash and len(assessment_request.hash) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="hash must be 128 characters or less"
+        )
+    
     if not assessment_request.product_name and not assessment_request.vendor_name and not assessment_request.url:
         print("[API] ✗ Validation failed: Missing required fields")
         raise HTTPException(
@@ -236,6 +258,29 @@ async def compare_applications(requests: List[AssessmentRequest], request: Reque
             status_code=400,
             detail="Maximum 10 applications allowed for comparison"
         )
+    
+    # Validate input lengths for all requests
+    for i, req in enumerate(requests):
+        if req.product_name and len(req.product_name) > 128:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Request {i+1}: product_name must be 128 characters or less"
+            )
+        if req.vendor_name and len(req.vendor_name) > 128:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Request {i+1}: vendor_name must be 128 characters or less"
+            )
+        if req.url and len(req.url) > 128:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Request {i+1}: url must be 128 characters or less"
+            )
+        if req.hash and len(req.hash) > 128:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Request {i+1}: hash must be 128 characters or less"
+            )
     
     try:
         print("[API] Starting comparison...")
