@@ -220,10 +220,63 @@ If information is limited, state that clearly. Write the usage description:"""
         if vt:
             positives = vt.get("positives", 0)
             total_scans = vt.get("total", 0)
-            if positives > 0:
-                indicators.append(f"VirusTotal: {positives}/{total_scans} security vendors flagged this file")
-            elif total_scans > 0:
-                indicators.append(f"VirusTotal: 0/{total_scans} vendors flagged (clean scan)")
+            malicious = vt.get("malicious", 0)
+            suspicious = vt.get("suspicious", 0)
+            reputation = vt.get("reputation", 0)
+            risk_level = vt.get("risk_level", "unknown")
+            risk_confidence = vt.get("risk_confidence", 0.5)
+            risk_rationale = vt.get("risk_rationale", [])
+            threat_names = vt.get("threat_names", [])
+            risk_flags = vt.get("risk_flags", [])
+            false_positive_indicators = vt.get("false_positive_indicators", [])
+            comments = vt.get("comments", [])
+            
+            # Build comprehensive VirusTotal indicator with v3 data
+            vt_indicator = f"VirusTotal: {positives}/{total_scans} flagged"
+            if malicious > 0:
+                vt_indicator += f" ({malicious} malicious"
+                if suspicious > 0:
+                    vt_indicator += f", {suspicious} suspicious"
+                vt_indicator += ")"
+            elif suspicious > 0:
+                vt_indicator += f" ({suspicious} suspicious)"
+            
+            if reputation != 0:
+                vt_indicator += f", reputation: {reputation}"
+            
+            if threat_names:
+                threat_str = ", ".join(threat_names[:3])
+                vt_indicator += f", threats: {threat_str}"
+            
+            if risk_level != "unknown":
+                confidence_pct = int(risk_confidence * 100)
+                vt_indicator += f", risk: {risk_level} ({confidence_pct}% confidence)"
+            
+            indicators.append(vt_indicator)
+            
+            # Add risk rationale (explains the assessment)
+            if risk_rationale:
+                for rationale in risk_rationale[:2]:
+                    indicators.append(f"VirusTotal: {rationale}")
+            
+            # Add false positive indicators if present
+            if false_positive_indicators:
+                fp_str = ", ".join(false_positive_indicators)
+                indicators.append(f"VirusTotal: False positive indicators detected ({fp_str})")
+            
+            # Add specific risk flags
+            if "high_detection_rate" in risk_flags and "high_detection_rate_with_fp_indicators" not in risk_flags:
+                indicators.append("VirusTotal: High detection rate (>30% of engines flagged) - high confidence threat")
+            if "very_low_reputation" in risk_flags:
+                indicators.append("VirusTotal: Very low reputation score")
+            if "threat_classified" in risk_flags:
+                indicators.append("VirusTotal: File classified as known threat")
+            if "sandbox_analysis_available" in risk_flags:
+                indicators.append("VirusTotal: Sandbox behavioral analysis available")
+            
+            # Add community comments if available
+            if comments:
+                indicators.append(f"VirusTotal: {len(comments)} community comments available")
 
         if self.use_ai and self.model:
             try:
@@ -236,12 +289,16 @@ Security Indicators:
 {chr(10).join(indicators) if indicators else "No security indicators found in public databases."}
 
 Rules:
-- Be factual and evidence-based
-- If indicators are positive (few CVEs, no KEV entries, clean VirusTotal), note that
-- If indicators are concerning (many CVEs, KEV entries, VirusTotal flags), state clearly
+- Be factual and evidence-based - only state what the data shows
+- If indicators are positive (few CVEs, no KEV entries, clean VirusTotal), note that clearly
+- If indicators are concerning (many CVEs, KEV entries, VirusTotal flags), state clearly but distinguish between high-confidence and low-confidence findings
+- If VirusTotal shows false positive indicators, mention that the risk may be lower than detections suggest
 - If data is very limited, explicitly state "Insufficient public evidence"
 - Do NOT overstate reputation without strong evidence
 - Mention specific numbers when available
+- Be conservative - when confidence is low, state uncertainty clearly
+- Cross-reference findings: if VirusTotal is clean but CVEs exist, note CVEs may be patched
+- Use VirusTotal risk confidence levels to qualify statements
 
 Write the vendor reputation summary:"""
 
@@ -504,7 +561,7 @@ Vendor text:
                     timestamp=datetime.now()
                 ))
 
-        # Add VirusTotal citation with proper URL
+        # Add VirusTotal citation with proper URL and enhanced v3 information
         vt = data.get("virustotal")
         hash_value = data.get("hash", "")
         # Try to get hash from VirusTotal response if not in data
@@ -514,11 +571,17 @@ Vendor text:
         if vt and vt.get("response_code") == 1:
             positives = vt.get("positives", 0)
             total = vt.get("total", 0)
+            malicious = vt.get("malicious", 0)
+            suspicious = vt.get("suspicious", 0)
+            reputation = vt.get("reputation", 0)
+            risk_level = vt.get("risk_level", "unknown")
+            risk_confidence = vt.get("risk_confidence", 0.5)
+            threat_names = vt.get("threat_names", [])
+            false_positive_indicators = vt.get("false_positive_indicators", [])
+            
             # Build VirusTotal report URL using the hash
             if hash_value:
-                # Determine hash type and build URL
                 hash_upper = hash_value.upper().strip()
-                # VirusTotal accepts SHA256, SHA1, or MD5 in the URL
                 if len(hash_upper) in [32, 40, 64]:
                     vt_url = f"https://www.virustotal.com/gui/file/{hash_upper}"
                 else:
@@ -526,10 +589,29 @@ Vendor text:
             else:
                 vt_url = "https://www.virustotal.com"
             
+            # Build comprehensive claim with v3 data including confidence
+            claim_parts = [f"VirusTotal v3 analysis: {positives}/{total} engines flagged"]
+            if malicious > 0:
+                claim_parts.append(f"{malicious} malicious")
+            if suspicious > 0:
+                claim_parts.append(f"{suspicious} suspicious")
+            if reputation != 0:
+                claim_parts.append(f"reputation: {reputation}")
+            if risk_level != "unknown":
+                confidence_pct = int(risk_confidence * 100)
+                claim_parts.append(f"risk: {risk_level} ({confidence_pct}% confidence)")
+            if threat_names:
+                threat_str = ", ".join(threat_names[:2])
+                claim_parts.append(f"threats: {threat_str}")
+            if false_positive_indicators:
+                claim_parts.append("false positive indicators detected")
+            
+            claim = ", ".join(claim_parts)
+            
             cites.append(Citation(
                 source=vt_url,
                 source_type="VirusTotal",
-                claim=f"VirusTotal file analysis: {positives}/{total} vendors flagged",
+                claim=claim,
                 is_vendor_stated=False,
                 timestamp=datetime.now()
             ))
@@ -673,23 +755,94 @@ Respond with ONLY the summary text, no labels or prefixes."""
                 score -= 8
                 factors["critical_cves"] = -8
 
-        # VirusTotal analysis
+        # VirusTotal analysis (enhanced with v3 data and confidence scoring)
         if vt and vt.get("response_code") == 1:
             positives = vt.get("positives", 0)
             total = vt.get("total", 0)
+            malicious = vt.get("malicious", 0)
+            suspicious = vt.get("suspicious", 0)
+            reputation = vt.get("reputation", 0)
+            risk_level = vt.get("risk_level", "unknown")
+            risk_confidence = vt.get("risk_confidence", 0.5)
+            threat_names = vt.get("threat_names", [])
+            risk_flags = vt.get("risk_flags", [])
+            false_positive_indicators = vt.get("false_positive_indicators", [])
+            community_malicious = vt.get("community_malicious", 0)
+            community_harmless = vt.get("community_harmless", 0)
+            
+            # Apply confidence weighting to all VT-based score adjustments
+            confidence_multiplier = risk_confidence
+            
             if positives == 0 and total > 0:
-                # Clean scan is positive
-                score += 8
-                factors["clean_virustotal"] = +8
-            elif positives > 0:
-                # Flagged by vendors is negative
-                flag_ratio = positives / total if total > 0 else 0
-                if flag_ratio > 0.1:  # More than 10% flagged
-                    score -= 25
-                    factors["virustotal_flagged"] = -25
+                # Clean scan is positive, but check reputation and confidence
+                if reputation > 50:
+                    base_bonus = 12
+                    score += int(base_bonus * confidence_multiplier)
+                    factors["excellent_virustotal"] = +int(base_bonus * confidence_multiplier)
+                elif reputation > 0:
+                    base_bonus = 8
+                    score += int(base_bonus * confidence_multiplier)
+                    factors["clean_virustotal"] = +int(base_bonus * confidence_multiplier)
                 else:
+                    base_bonus = 5
+                    score += int(base_bonus * confidence_multiplier)
+                    factors["clean_virustotal_low_rep"] = +int(base_bonus * confidence_multiplier)
+            elif positives > 0:
+                # Flagged by vendors is negative - use enhanced risk assessment with confidence
+                flag_ratio = positives / total if total > 0 else 0
+                
+                # Check for false positive indicators - reduce penalty if present
+                fp_reduction = 0.5 if false_positive_indicators else 1.0
+                
+                # Critical risk: high detection rate or known threats
+                if risk_level == "critical":
+                    base_penalty = 35
+                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
+                    score -= adjusted_penalty
+                    factors["virustotal_critical"] = -adjusted_penalty
+                elif risk_level == "high":
+                    # High risk: >10% flagged or primarily malicious
+                    if malicious > suspicious * 2:
+                        base_penalty = 30
+                    else:
+                        base_penalty = 20
+                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
+                    score -= adjusted_penalty
+                    if malicious > suspicious * 2:
+                        factors["virustotal_malicious"] = -adjusted_penalty
+                    else:
+                        factors["virustotal_flagged"] = -adjusted_penalty
+                elif risk_level == "medium":
+                    # Medium risk: some detections but not overwhelming
+                    if threat_names:
+                        base_penalty = 18
+                    else:
+                        base_penalty = 12
+                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
+                    score -= adjusted_penalty
+                    if threat_names:
+                        factors["virustotal_threat_classified"] = -adjusted_penalty
+                    else:
+                        factors["virustotal_suspicious"] = -adjusted_penalty
+                else:
+                    # Low risk: few detections
+                    base_penalty = 8
+                    adjusted_penalty = int(base_penalty * confidence_multiplier * fp_reduction)
+                    score -= adjusted_penalty
+                    factors["virustotal_low_risk"] = -adjusted_penalty
+                
+                # Additional penalties for reputation (only if high confidence)
+                if reputation < -50 and risk_confidence > 0.7:
                     score -= 10
-                    factors["virustotal_suspicious"] = -10
+                    factors["very_low_reputation"] = -10
+                elif reputation < 0 and risk_confidence > 0.6:
+                    score -= 5
+                    factors["negative_reputation"] = -5
+                
+                # Community votes matter (weighted by confidence)
+                if community_malicious > community_harmless * 3 and risk_confidence > 0.6:
+                    score -= int(8 * confidence_multiplier)
+                    factors["community_flagged_malicious"] = -int(8 * confidence_multiplier)
 
         # Positive factors
         if len(security_posture.citations) >= 5:
@@ -730,37 +883,68 @@ Respond with ONLY the summary text, no labels or prefixes."""
         else:
             level = "Critical"
 
-        # Confidence based on data quality
+        # Enhanced confidence calculation based on data quality and risk confidence
         cites = len(security_posture.citations)
         has_vt = vt and vt.get("response_code") == 1
         has_cves = cve.total_cves > 0
         has_vendor_info = any("vendor" in c.source_type.lower() for c in security_posture.citations)
         
+        # Base confidence from data sources
         if cites >= 5 and (has_vt or has_cves) and has_vendor_info:
-            conf = 0.85
+            base_conf = 0.85
         elif cites >= 3 and (has_vt or has_cves):
-            conf = 0.70
+            base_conf = 0.70
         elif cites >= 2:
-            conf = 0.55
+            base_conf = 0.55
         elif cites >= 1:
-            conf = 0.40
+            base_conf = 0.40
         else:
-            conf = 0.25
+            base_conf = 0.25
+        
+        # Adjust confidence based on VirusTotal risk confidence if available
+        if has_vt:
+            vt_risk_confidence = vt.get("risk_confidence", 0.5)
+            # Weight VT confidence: if VT has high confidence, boost overall confidence
+            if vt_risk_confidence > 0.8:
+                base_conf = min(1.0, base_conf + 0.10)  # High VT confidence boosts overall
+            elif vt_risk_confidence < 0.5:
+                base_conf = max(0.2, base_conf - 0.05)  # Low VT confidence slightly reduces
+        
+        # Adjust confidence based on CVE-VT cross-validation
+        if has_vt and has_cves:
+            vt_risk = vt.get("risk_level", "unknown")
+            # If VT is clean but CVEs exist, confidence is lower (CVEs may be patched)
+            if vt_risk == "clean" and cve.total_cves > 0:
+                base_conf = max(0.3, base_conf - 0.10)
+        
+        # Adjust confidence based on false positive indicators
+        if has_vt:
+            fp_indicators = vt.get("false_positive_indicators", [])
+            if fp_indicators:
+                # False positive indicators suggest we should be more cautious
+                base_conf = max(0.3, base_conf - 0.05)
+        
+        conf = base_conf
 
         # Build rationale
         factor_summary = []
-        for key, value in sorted(factors.items(), key=lambda x: abs(x[1]), reverse=True)[:5]:
+        # Filter out non-numeric values (like string messages) before sorting
+        numeric_factors = {k: v for k, v in factors.items() if isinstance(v, (int, float))}
+        for key, value in sorted(numeric_factors.items(), key=lambda x: abs(x[1]), reverse=True)[:5]:
             sign = "+" if value > 0 else ""
             factor_summary.append(f"{key}: {sign}{value}")
         
         rationale = f"Trust score: {score}/100 ({level} risk). Key factors: {', '.join(factor_summary)}. Confidence: {conf:.0%} based on {cites} data sources."
+
+        # Filter out any non-numeric values from factors before returning (Pydantic validation requires only numbers)
+        numeric_factors_only = {k: v for k, v in factors.items() if isinstance(v, (int, float))}
 
         return TrustScore(
             score=score,
             risk_level=level,
             confidence=conf,
             rationale=rationale,
-            factors=factors
+            factors=numeric_factors_only
         )
 
 

@@ -429,34 +429,300 @@ Respond with ONLY valid JSON, no additional text or explanation."""
 
 
 class VirusTotalCollector(DataCollector):
-    """Collect data from VirusTotal"""
+    """Collect comprehensive data from VirusTotal using v3 API"""
+    
+    async def _fetch_v3(self, endpoint: str, api_key: str) -> Optional[Dict]:
+        """Helper method to fetch from VirusTotal v3 API"""
+        url = f"https://www.virustotal.com/api/v3{endpoint}"
+        headers = {
+            **self.headers,
+            "x-apikey": api_key
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, headers=headers) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 404:
+                    return None
+                elif response.status_code == 429:
+                    print(f"[VirusTotal Collector] ⚠ Rate limit exceeded")
+                    return None
+                else:
+                    print(f"[VirusTotal Collector] ⚠ API returned status {response.status_code} for {endpoint}")
+                    return None
+        except Exception as e:
+            print(f"[VirusTotal Collector] ✗ Error fetching {endpoint}: {e}")
+            return None
     
     async def get_file_report(self, hash: str) -> Optional[Dict]:
-        """Get VirusTotal file report"""
-        print(f"[VirusTotal Collector] Fetching report for hash: {hash[:16]}...")
+        """Get comprehensive VirusTotal file report using v3 API with multiple endpoints"""
+        print(f"[VirusTotal Collector] Fetching v3 report for hash: {hash[:16]}...")
         api_key = os.getenv("VIRUSTOTAL_API_KEY")
         if not api_key:
             print("[VirusTotal Collector] ✗ VIRUSTOTAL_API_KEY not configured, skipping")
             return None
         
-        url = "https://www.virustotal.com/vtapi/v2/file/report"
-        params = {
-            "apikey": api_key,
-            "resource": hash
+        # Fetch main file report
+        file_data = await self._fetch_v3(f"/files/{hash}", api_key)
+        if not file_data:
+            print(f"[VirusTotal Collector] Hash not found in VirusTotal database")
+            return {"response_code": 0, "message": "Hash not found"}
+        
+        # Extract attributes from v3 response
+        attributes = file_data.get("data", {}).get("attributes", {})
+        
+        # Get analysis stats
+        last_analysis_stats = attributes.get("last_analysis_stats", {})
+        malicious = last_analysis_stats.get("malicious", 0)
+        suspicious = last_analysis_stats.get("suspicious", 0)
+        harmless = last_analysis_stats.get("harmless", 0)
+        undetected = last_analysis_stats.get("undetected", 0)
+        total_engines = malicious + suspicious + harmless + undetected
+        positives = malicious + suspicious
+        
+        # Get reputation
+        reputation = attributes.get("reputation", 0)
+        
+        # Get threat classification
+        threat_names = []
+        popular_threat = attributes.get("popular_threat_classification", {})
+        if popular_threat:
+            threat_label = popular_threat.get("suggested_threat_label", "")
+            if threat_label:
+                threat_names = [threat_label] if isinstance(threat_label, str) else threat_label
+        
+        # Get community votes
+        community_votes = attributes.get("community_votes", {})
+        community_harmless = community_votes.get("harmless", 0)
+        community_malicious = community_votes.get("malicious", 0)
+        
+        # Get file metadata
+        type_description = attributes.get("type_description", "")
+        type_extension = attributes.get("type_extension", "")
+        meaningful_name = attributes.get("meaningful_name", "")
+        size = attributes.get("size", 0)
+        tags = attributes.get("tags", [])
+        names = attributes.get("names", [])
+        
+        # Get last analysis results (detailed engine results)
+        last_analysis_results = attributes.get("last_analysis_results", {})
+        
+        # Get sandbox verdicts
+        sandbox_verdicts = attributes.get("sandbox_verdicts", {})
+        
+        # Get behavior data
+        sigma_analysis_stats = attributes.get("sigma_analysis_stats", {})
+        crowdsourced_yara_results = attributes.get("crowdsourced_yara_results", [])
+        
+        # Fetch additional data from other v3 endpoints
+        comments_data = await self._fetch_v3(f"/files/{hash}/comments", api_key)
+        comments = []
+        if comments_data and "data" in comments_data:
+            comments = comments_data.get("data", [])[:5]  # Limit to 5 most recent
+        
+        # Fetch relationships (related files, URLs, etc.)
+        relationships_data = await self._fetch_v3(f"/files/{hash}/relationships", api_key)
+        relationships = {}
+        if relationships_data and "data" in relationships_data:
+            relationships = relationships_data.get("data", {})
+        
+        # Calculate detection metrics
+        detection_consensus = positives / total_engines if total_engines > 0 else 0.0
+        reputation_confidence = min(1.0, total_engines / 70.0)
+        
+        # Enhanced false positive detection
+        false_positive_indicators = []
+        if positives > 0:
+            # Few detections with many engines = potential FP
+            if positives <= 3 and total_engines > 50:
+                false_positive_indicators.append("few_detections")
+            # Mostly suspicious vs malicious = less certain
+            if suspicious > malicious * 2:
+                false_positive_indicators.append("mostly_suspicious")
+            # High reputation but detections = potential FP
+            if reputation > 50 and positives < 5:
+                false_positive_indicators.append("high_rep_with_detections")
+            # Community says harmless but engines flagged
+            if community_harmless > community_malicious * 2 and positives < 10:
+                false_positive_indicators.append("community_disagrees")
+        
+        # Enhanced risk assessment
+        risk_level = "unknown"
+        risk_confidence = 0.5
+        risk_rationale = []
+        risk_flags = []
+        
+        flag_ratio = detection_consensus
+        has_fp_indicators = len(false_positive_indicators) > 0
+        
+        if positives == 0 and total_engines > 0:
+            risk_level = "clean"
+            risk_flags.append("no_detections")
+            risk_confidence = 0.85 if total_engines > 50 else 0.65
+            risk_rationale.append(f"Clean scan: 0/{total_engines} engines flagged")
+            if reputation > 50:
+                risk_confidence = 0.95
+                risk_rationale.append(f"High reputation score ({reputation})")
+        elif positives > 0:
+            # High detection rate (>30%)
+            if flag_ratio > 0.3:
+                if not has_fp_indicators:
+                    risk_level = "critical"
+                    risk_confidence = 0.90
+                    risk_flags.append("high_detection_rate")
+                    risk_rationale.append(f"High detection rate: {positives}/{total_engines} ({flag_ratio:.1%}) engines flagged")
+                else:
+                    risk_level = "high"
+                    risk_confidence = 0.70
+                    risk_flags.append("high_detection_rate_with_fp_indicators")
+                    risk_rationale.append(f"High detection rate ({flag_ratio:.1%}) but false positive indicators present")
+            # Moderate detection rate (10-30%)
+            elif flag_ratio > 0.1:
+                if malicious > suspicious * 2:
+                    risk_level = "high" if not has_fp_indicators else "medium"
+                    risk_confidence = 0.80 if not has_fp_indicators else 0.60
+                    risk_flags.append("moderate_detection_rate_malicious")
+                    risk_rationale.append(f"Moderate detection rate ({flag_ratio:.1%}), primarily malicious ({malicious} malicious, {suspicious} suspicious)")
+                else:
+                    risk_level = "medium" if not has_fp_indicators else "low"
+                    risk_confidence = 0.70 if not has_fp_indicators else 0.55
+                    risk_flags.append("moderate_detection_rate")
+                    risk_rationale.append(f"Moderate detection rate ({flag_ratio:.1%}), mostly suspicious detections")
+            # Low detection rate (<10%)
+            else:
+                if has_fp_indicators:
+                    risk_level = "low"
+                    risk_confidence = 0.60
+                    risk_flags.append("low_detection_rate_likely_fp")
+                    risk_rationale.append(f"Low detection rate ({flag_ratio:.1%}) with false positive indicators - likely benign")
+                elif malicious > 0:
+                    risk_level = "low"
+                    risk_confidence = 0.65
+                    risk_flags.append("low_detection_rate_some_malicious")
+                    risk_rationale.append(f"Low detection rate ({flag_ratio:.1%}) but includes {malicious} malicious detections")
+                else:
+                    risk_level = "low"
+                    risk_confidence = 0.70
+                    risk_flags.append("low_detection_rate_suspicious_only")
+                    risk_rationale.append(f"Low detection rate ({flag_ratio:.1%}), only suspicious detections")
+            
+            if malicious > suspicious:
+                risk_flags.append("primarily_malicious")
+            else:
+                risk_flags.append("primarily_suspicious")
+        
+        # Reputation impact
+        if reputation < -50:
+            risk_flags.append("very_low_reputation")
+            if risk_level in ["clean", "low", "unknown"]:
+                risk_level = "high"
+                risk_confidence = max(risk_confidence, 0.75)
+            risk_rationale.append(f"Very low reputation score ({reputation})")
+        elif reputation < 0:
+            risk_flags.append("negative_reputation")
+            if risk_level == "clean":
+                risk_level = "low"
+                risk_confidence = 0.65
+            risk_rationale.append(f"Negative reputation score ({reputation})")
+        elif reputation > 50 and positives > 0:
+            risk_confidence = max(0.5, risk_confidence - 0.15)
+            risk_rationale.append(f"High reputation ({reputation}) conflicts with detections - possible false positive")
+        
+        # Threat classification impact
+        if threat_names:
+            risk_flags.append("threat_classified")
+            if risk_level in ["clean", "low"]:
+                risk_level = "medium"
+                risk_confidence = 0.75
+            risk_rationale.append(f"Threat classified: {', '.join(threat_names[:2])}")
+        
+        # Community votes impact
+        total_community_votes = community_harmless + community_malicious
+        if total_community_votes > 0:
+            community_ratio = community_malicious / total_community_votes
+            if community_ratio > 0.7:
+                risk_flags.append("community_flagged_malicious")
+                if risk_level in ["clean", "low"]:
+                    risk_level = "medium"
+                    risk_confidence = 0.70
+                risk_rationale.append(f"Community votes: {community_malicious}/{total_community_votes} flagged as malicious")
+            elif community_ratio < 0.3 and positives > 0:
+                risk_confidence = max(0.5, risk_confidence - 0.10)
+                risk_rationale.append(f"Community votes suggest harmless ({community_harmless}/{total_community_votes}) despite engine detections")
+        
+        # Sandbox verdicts boost confidence
+        if sandbox_verdicts:
+            risk_flags.append("sandbox_analysis_available")
+            risk_confidence = min(1.0, risk_confidence + 0.10)
+        
+        # File age and history
+        first_submission = attributes.get("first_submission_date", 0)
+        if first_submission > 0 and total_engines > 60 and positives == 0:
+            risk_confidence = min(1.0, risk_confidence + 0.05)
+            risk_rationale.append("Well-scanned file with extensive history")
+        
+        # Build comprehensive response
+        normalized_data = {
+            "response_code": 1,
+            "positives": positives,
+            "total": total_engines,
+            "malicious": malicious,
+            "suspicious": suspicious,
+            "harmless": harmless,
+            "undetected": undetected,
+            "reputation": reputation,
+            "reputation_confidence": reputation_confidence,
+            "threat_names": threat_names,
+            "community_harmless": community_harmless,
+            "community_malicious": community_malicious,
+            "type_description": type_description,
+            "type_extension": type_extension,
+            "meaningful_name": meaningful_name,
+            "tags": tags,
+            "names": names[:5],
+            "size": size,
+            "sandbox_verdicts": sandbox_verdicts,
+            "last_analysis_results": last_analysis_results,
+            "sigma_analysis_stats": sigma_analysis_stats,
+            "crowdsourced_yara_results": crowdsourced_yara_results,
+            "comments": comments,
+            "relationships": relationships,
+            "detection_consensus": detection_consensus,
+            "false_positive_indicators": false_positive_indicators,
+            "risk_level": risk_level,
+            "risk_confidence": risk_confidence,
+            "risk_rationale": risk_rationale,
+            "risk_flags": risk_flags,
+            "sha256": attributes.get("sha256", ""),
+            "sha1": attributes.get("sha1", ""),
+            "md5": attributes.get("md5", ""),
+            "first_submission_date": first_submission,
+            "last_submission_date": attributes.get("last_submission_date", 0),
+            "last_analysis_date": attributes.get("last_analysis_date", 0),
+            "v3_api": True
         }
         
-        data = await self.fetch(url, params)
-        if data:
-            if data.get("response_code") == 1:
-                positives = data.get("positives", 0)
-                total = data.get("total", 0)
-                print(f"[VirusTotal Collector] ✓ Report retrieved: {positives}/{total} vendors flagged")
-            else:
-                print(f"[VirusTotal Collector] Hash not found in VirusTotal database")
-        else:
-            print(f"[VirusTotal Collector] ✗ Failed to retrieve report")
+        print(f"[VirusTotal Collector] ✓ v3 Report: {positives}/{total_engines} flagged ({malicious} malicious, {suspicious} suspicious), reputation: {reputation}, risk: {risk_level} (confidence: {int(risk_confidence*100)}%)")
         
-        return data
+        return normalized_data
+    
+    async def search_file(self, query: str) -> Optional[Dict]:
+        """Search VirusTotal for files using v3 API"""
+        print(f"[VirusTotal Collector] Searching v3 for: {query[:50]}...")
+        api_key = os.getenv("VIRUSTOTAL_API_KEY")
+        if not api_key:
+            print("[VirusTotal Collector] ✗ VIRUSTOTAL_API_KEY not configured, skipping")
+            return None
+        
+        search_data = await self._fetch_v3(f"/search?query={query}&limit=10", api_key)
+        if search_data and "data" in search_data:
+            results = search_data.get("data", [])
+            print(f"[VirusTotal Collector] ✓ Search found {len(results)} results")
+            return {"results": results, "count": len(results)}
+        
+        return None
 
 
 class CIRCLHashlookupCollector(DataCollector):
