@@ -236,18 +236,53 @@ class AssessmentService:
         hashlookup_info = results[5] if not isinstance(results[5], Exception) else None
         incidents = results[6] if not isinstance(results[6], Exception) else []
         
-        # If hashlookup found version info, search for version-specific CVEs
+        # Extract latest version from vendor page if available (prefer this as it's the "latest" version)
         product_version = None
+        version_source = None
+        
+        # First, try to get version from hashlookup
         if hashlookup_info and hashlookup_info.get("found"):
             product_version = hashlookup_info.get("product_version")
             if product_version:
                 print(f"[Assessment Service] ✓ Detected product version from hashlookup: {product_version}")
-                print(f"[Assessment Service] Searching for version-specific CVEs...")
-                version_cve_data = await self.cve_collector.search_cves(
-                    entity_name, vendor_name, product_version
-                )
-                # Merge version-specific data into CVE results
-                cve_data.update(version_cve_data)
+                version_source = "hashlookup"
+        
+        # Then, try to get latest version from vendor page (this takes precedence as it's the "latest")
+        if vendor_page and vendor_page.get("content") and vendor_page.get("url"):
+            print(f"[Assessment Service] Attempting to extract latest version from vendor page...")
+            latest_version = await self.vendor_collector.extract_latest_version(
+                vendor_page.get("content", ""),
+                entity_name,
+                vendor_name,
+                vendor_page.get("url", "")
+            )
+            if latest_version:
+                print(f"[Assessment Service] ✓ Extracted latest version from vendor page: {latest_version}")
+                product_version = latest_version  # Prefer vendor page version as it's the "latest"
+                version_source = "vendor_page"
+            else:
+                print(f"[Assessment Service] Could not extract version from vendor page")
+        
+        # If we have a version (from hashlookup or vendor page), search for version-specific CVEs
+        if product_version:
+            print(f"[Assessment Service] Searching for version-specific CVEs for version: {product_version}...")
+            version_cve_data = await self.cve_collector.search_cves(
+                entity_name, vendor_name, product_version
+            )
+            # Merge version-specific data into CVE results
+            cve_data.update(version_cve_data)
+        
+        # Update hashlookup_info with the version we're using (vendor page version takes precedence)
+        if product_version and hashlookup_info:
+            hashlookup_info["product_version"] = product_version
+            hashlookup_info["version_source"] = version_source or "unknown"
+        elif product_version and not hashlookup_info:
+            # Create hashlookup_info dict if it doesn't exist but we have a version
+            hashlookup_info = {
+                "found": True,
+                "product_version": product_version,
+                "version_source": version_source or "vendor_page"
+            }
         
         return {
             "cves": cve_data,

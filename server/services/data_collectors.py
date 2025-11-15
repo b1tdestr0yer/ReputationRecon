@@ -224,6 +224,113 @@ class CVECollector(DataCollector):
 class VendorPageCollector(DataCollector):
     """Collect data from vendor security pages"""
     
+    def __init__(self):
+        """Initialize VendorPageCollector with optional Gemini AI support"""
+        super().__init__()
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                # Try gemini-2.5-flash first, fallback to gemini-2.5-pro
+                try:
+                    self.model = genai.GenerativeModel('gemini-2.5-flash')
+                    self.use_ai = True
+                    print("[Vendor Collector] ✓ Google Gemini configured for version extraction (using gemini-2.5-flash)")
+                except Exception as e:
+                    print(f"[Vendor Collector] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
+                    try:
+                        self.model = genai.GenerativeModel('gemini-2.5-pro')
+                        self.use_ai = True
+                        print("[Vendor Collector] ✓ Google Gemini configured (using gemini-2.5-pro)")
+                    except Exception as e2:
+                        print(f"[Vendor Collector] ✗ Error initializing Gemini models: {e2}, using fallback")
+                        self.model = None
+                        self.use_ai = False
+            except Exception as e:
+                print(f"[Vendor Collector] ✗ Error configuring Gemini: {e}, using fallback")
+                self.model = None
+                self.use_ai = False
+        else:
+            self.model = None
+            self.use_ai = False
+    
+    async def extract_latest_version(self, vendor_page_content: str, product_name: str, vendor_name: str, vendor_url: str) -> Optional[str]:
+        """Extract the latest version of the software from vendor page content using Gemini"""
+        if not self.use_ai or not self.model:
+            print("[Vendor Collector] Gemini not available, skipping AI-based version extraction")
+            return None
+        
+        if not vendor_page_content or not product_name:
+            print("[Vendor Collector] Insufficient data for version extraction")
+            return None
+        
+        try:
+            print(f"[Vendor Collector] Using Gemini to extract latest version for: {product_name} by {vendor_name}")
+            # Clean HTML content - remove script and style tags
+            import re
+            cleaned_content = re.sub(r'<script[^>]*>.*?</script>', '', vendor_page_content, flags=re.DOTALL | re.IGNORECASE)
+            cleaned_content = re.sub(r'<style[^>]*>.*?</style>', '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
+            # Remove HTML tags but keep text
+            cleaned_content = re.sub(r'<[^>]+>', ' ', cleaned_content)
+            # Clean up whitespace
+            cleaned_content = ' '.join(cleaned_content.split())
+            # Limit content length for API
+            cleaned_content = cleaned_content[:15000]  # Limit to 15k chars
+            
+            prompt = f"""Analyze the following vendor page content and extract the latest/current version number for the software product.
+
+Product Name: {product_name}
+Vendor Name: {vendor_name}
+Vendor URL: {vendor_url}
+
+Page Content (first 15000 characters):
+{cleaned_content}
+
+Please identify the latest/current version number of {product_name}. Look for:
+- Version numbers (e.g., 1.2.3, 2.0, v3.1.4, 2024.1)
+- Release announcements mentioning "latest version" or "current version"
+- Download pages showing version numbers
+- Release notes or changelog entries
+
+Return ONLY the version number in JSON format:
+{{"version": "1.2.3"}}
+
+If you cannot find a clear version number, return:
+{{"version": null}}
+
+Respond with ONLY valid JSON, no additional text or explanation."""
+
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Try to extract JSON from response
+            # Remove markdown code blocks if present
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                result = json.loads(response_text)
+                version = result.get("version")
+                if version and version.lower() not in ["null", "none", "unknown", ""]:
+                    # Clean up version string (remove "v" prefix, extra spaces, etc.)
+                    version = version.strip().lstrip("vV").strip()
+                    print(f"[Vendor Collector] ✓ Gemini extracted latest version: {version}")
+                    return version
+                else:
+                    print(f"[Vendor Collector] ✗ Gemini could not find version information")
+                    return None
+            except json.JSONDecodeError as e:
+                print(f"[Vendor Collector] ✗ Failed to parse Gemini JSON response: {e}")
+                print(f"[Vendor Collector] Response was: {response_text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"[Vendor Collector] ✗ Error using Gemini for version extraction: {e}")
+            return None
+    
     async def fetch_security_page(self, vendor_url: str) -> Optional[Dict]:
         """Try to find and fetch vendor security/PSIRT page"""
         print(f"[Vendor Collector] Searching for security page at: {vendor_url}")
