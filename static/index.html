@@ -362,7 +362,7 @@
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <i class="fas fa-info-circle card-icon" style="color: #2196F3; font-size: 1.8em;"></i>
                                     <div class="card-title">Description</div>
-                                </div>
+                        </div>
                                 <i class="fas fa-chevron-down security-card-toggle"></i>
                             </div>
                             <div class="security-card-content">${data.security_posture.description}</div>
@@ -426,10 +426,166 @@
                 </div>
                 
                 <div class="section">
-                    <h3><i class="fas fa-clipboard-check"></i> Recommendation</h3>
-                    <div style="background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%); padding: 20px; border-radius: 10px; border-left: 5px solid #667eea; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        ${data.suggestion ? data.suggestion.split('\n').map(para => para.trim() ? `<p style="margin: 10px 0;">${para}</p>` : '').join('') : '<p>No recommendation available.</p>'}
-                    </div>
+                    <h3><i class="fas fa-clipboard-check"></i> Security Recommendation</h3>
+                    ${(() => {
+                        // Parse recommendation status from AI text (not just trust score)
+                        let cleanSuggestion = data.suggestion || 'No recommendation available.';
+                        
+                        // Remove markdown asterisks
+                        cleanSuggestion = cleanSuggestion.replace(/\*\*([^*]+)\*\*/g, '$1');
+                        cleanSuggestion = cleanSuggestion.replace(/\*([^*]+)\*/g, '$1');
+                        cleanSuggestion = cleanSuggestion.replace(/_([^_]+)_/g, '$1');
+                        
+                        // Extract recommendation status from text
+                        let recStatus, recColor, recBgGradient, recBorderColor, recIcon, recTitle, recSubtitle;
+                        const suggestionUpper = cleanSuggestion.toUpperCase();
+                        const suggestionLower = cleanSuggestion.toLowerCase();
+                        
+                        // Check for explicit status markers first (from AI)
+                        if (suggestionUpper.includes('NOT RECOMMENDED') || 
+                            suggestionLower.includes('do not allow') || 
+                            suggestionLower.includes('not recommended') ||
+                            suggestionLower.includes('should not be allowed') ||
+                            suggestionLower.includes('unsuitable for company laptops') ||
+                            suggestionLower.includes('significant security risks') && suggestionLower.includes('not')) {
+                            recStatus = 'not-recommended';
+                            recColor = '#dc3545';
+                            recBgGradient = 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)';
+                            recBorderColor = '#dc3545';
+                            recIcon = 'fas fa-times-circle';
+                            recTitle = 'Not Recommended';
+                            recSubtitle = 'Significant security risks identified';
+                        } else if (suggestionUpper.includes('USE WITH CAUTION') ||
+                                   suggestionLower.includes('use with caution') ||
+                                   suggestionLower.includes('exercise caution') ||
+                                   suggestionLower.includes('elevated security concerns') ||
+                                   suggestionLower.includes('requires additional controls')) {
+                            recStatus = 'caution';
+                            recColor = '#ff9800';
+                            recBgGradient = 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)';
+                            recBorderColor = '#ff9800';
+                            recIcon = 'fas fa-exclamation-triangle';
+                            recTitle = 'Use with Caution';
+                            recSubtitle = 'Elevated security concerns require additional controls';
+                        } else if (suggestionUpper.includes('CONDITIONALLY APPROVED') ||
+                                   suggestionLower.includes('conditionally approved') ||
+                                   suggestionLower.includes('may be acceptable') ||
+                                   suggestionLower.includes('acceptable with') ||
+                                   suggestionLower.includes('moderate security')) {
+                            recStatus = 'conditional';
+                            recColor = '#ffc107';
+                            recBgGradient = 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)';
+                            recBorderColor = '#ffc107';
+                            recIcon = 'fas fa-check-circle';
+                            recTitle = 'Conditionally Approved';
+                            recSubtitle = 'Acceptable with standard security controls';
+                        } else if (suggestionUpper.includes('RECOMMENDED') ||
+                                   suggestionLower.includes('suitable for deployment') ||
+                                   suggestionLower.includes('appears suitable') ||
+                                   suggestionLower.includes('relatively good security')) {
+                            recStatus = 'recommended';
+                            recColor = '#28a745';
+                            recBgGradient = 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)';
+                            recBorderColor = '#28a745';
+                            recIcon = 'fas fa-check-circle';
+                            recTitle = 'Recommended';
+                            recSubtitle = 'Suitable for deployment with standard controls';
+                        } else {
+                            // Fallback to trust score if no clear status in text
+                            const score = trustScore;
+                            const risk = riskLevel;
+                            
+                            // Also check for negative indicators in text
+                            const hasNegativeIndicators = suggestionLower.includes('do not') || 
+                                                         suggestionLower.includes('not allow') ||
+                                                         suggestionLower.includes('significant risks') ||
+                                                         suggestionLower.includes('active exploitation');
+                            
+                            // Check for CISA KEV or critical CVEs
+                            const cisaKev = data.security_posture?.cve_summary?.cisa_kev_count || 0;
+                            const criticalCves = data.security_posture?.cve_summary?.critical_count || 0;
+                            
+                            if (hasNegativeIndicators || cisaKev > 0 || (score < 35 || risk === 'Critical')) {
+                                recStatus = 'not-recommended';
+                                recColor = '#dc3545';
+                                recBgGradient = 'linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%)';
+                                recBorderColor = '#dc3545';
+                                recIcon = 'fas fa-times-circle';
+                                recTitle = 'Not Recommended';
+                                recSubtitle = 'Significant security risks identified';
+                            } else if (score < 55 || risk === 'High' || criticalCves > 3) {
+                                recStatus = 'caution';
+                                recColor = '#ff9800';
+                                recBgGradient = 'linear-gradient(135deg, #fff8f0 0%, #ffe8d0 100%)';
+                                recBorderColor = '#ff9800';
+                                recIcon = 'fas fa-exclamation-triangle';
+                                recTitle = 'Use with Caution';
+                                recSubtitle = 'Elevated security concerns require additional controls';
+                            } else if (score < 75 || risk === 'Medium') {
+                                recStatus = 'conditional';
+                                recColor = '#ffc107';
+                                recBgGradient = 'linear-gradient(135deg, #fffbf0 0%, #fff5e0 100%)';
+                                recBorderColor = '#ffc107';
+                                recIcon = 'fas fa-check-circle';
+                                recTitle = 'Conditionally Approved';
+                                recSubtitle = 'Acceptable with standard security controls';
+                            } else {
+                                recStatus = 'recommended';
+                                recColor = '#28a745';
+                                recBgGradient = 'linear-gradient(135deg, #f0fff4 0%, #e0ffe0 100%)';
+                                recBorderColor = '#28a745';
+                                recIcon = 'fas fa-check-circle';
+                                recTitle = 'Recommended';
+                                recSubtitle = 'Suitable for deployment with standard controls';
+                            }
+                        }
+                        
+                        // Remove status line from text if present
+                        cleanSuggestion = cleanSuggestion.replace(/^(NOT RECOMMENDED|USE WITH CAUTION|CONDITIONALLY APPROVED|RECOMMENDED)\s*\n?/i, '');
+                        
+                        // Split into paragraphs and format
+                        const paragraphs = cleanSuggestion.split('\n').filter(p => p.trim());
+                        
+                        return `
+                            <div class="recommendation-card ${recStatus}" style="background: ${recBgGradient}; border-left: 5px solid ${recBorderColor}; border-radius: 12px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid rgba(0,0,0,0.1);">
+                                    <div style="width: 60px; height: 60px; border-radius: 50%; background: ${recColor}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                                        <i class="${recIcon}" style="font-size: 2em; color: white;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; color: ${recColor}; font-size: 1.5em; font-weight: 700;">${recTitle}</h4>
+                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.95em;">${recSubtitle}</p>
+                                    </div>
+                                </div>
+                                <div style="line-height: 1.8; color: #333;">
+                                    ${paragraphs.map(para => {
+                                        // Check if paragraph contains "Recommendation:" to make it stand out
+                                        if (para.toLowerCase().includes('recommendation:')) {
+                                            const parts = para.split(/recommendation:/i);
+                                            return `<p style="margin: 12px 0;"><strong style="color: ${recColor};">Recommendation:</strong> ${parts[1]?.trim() || ''}</p>`;
+                                        }
+                                        // Check for key phrases to emphasize
+                                        if (para.toLowerCase().includes('do not') || para.toLowerCase().includes('not recommended') || para.toLowerCase().includes('significant risks')) {
+                                            return `<p style="margin: 12px 0; color: ${recColor}; font-weight: 600;">${para.trim()}</p>`;
+                                        }
+                                        return `<p style="margin: 12px 0;">${para.trim()}</p>`;
+                                    }).join('')}
+                                </div>
+                                ${trustScore < 55 || recStatus === 'not-recommended' || recStatus === 'caution' ? `
+                                    <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.7); border-radius: 8px; border-left: 3px solid ${recColor};">
+                                        <p style="margin: 0; font-weight: 600; color: ${recColor};"><i class="fas fa-shield-alt"></i> Security Considerations:</p>
+                                        <ul style="margin: 10px 0 0 20px; padding-left: 10px; color: #555;">
+                                            ${data.security_posture?.cve_summary?.cisa_kev_count > 0 ? `<li>${data.security_posture.cve_summary.cisa_kev_count} vulnerability(ies) actively exploited (CISA KEV)</li>` : ''}
+                                            ${data.security_posture?.cve_summary?.critical_count > 0 ? `<li>${data.security_posture.cve_summary.critical_count} critical CVE(s) identified</li>` : ''}
+                                            ${data.security_posture?.cve_summary?.total_cves > 10 ? `<li>High number of CVEs (${data.security_posture.cve_summary.total_cves}) indicates ongoing security concerns</li>` : ''}
+                                            <li>Ensure latest version is deployed and monitored</li>
+                                            <li>Obtain management approval before deployment</li>
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    })()}
                 </div>
                 
                 <div class="section">
@@ -495,25 +651,25 @@
                     <h3><i class="fas fa-book"></i> Sources & Information</h3>
                     <div class="sources-list">
                         ${data.security_posture.citations.length > 0 ? `
-                        ${data.security_posture.citations.map(citation => {
-                            const sourceClass = citation.is_vendor_stated ? 'vendor' : 'independent';
-                            const isUrl = citation.source && citation.source.startsWith('http');
-                            const displayText = isUrl ? citation.source : `${citation.source_type}: ${citation.source}`;
-                            return `
+                            ${data.security_posture.citations.map(citation => {
+                                const sourceClass = citation.is_vendor_stated ? 'vendor' : 'independent';
+                                const isUrl = citation.source && citation.source.startsWith('http');
+                                const displayText = isUrl ? citation.source : `${citation.source_type}: ${citation.source}`;
+                                return `
                             <div class="source-item ${sourceClass}">
                                 <strong>${citation.source_type}</strong> ${citation.is_vendor_stated ? '<span style="color: #4caf50;">(Vendor-stated)</span>' : '<span style="color: #ffc107;">(Independent)</span>'}<br>
                                 ${isUrl ? `<a href="${citation.source}" target="_blank" rel="noopener noreferrer" style="color: #667eea;">${displayText}</a>` : `<span>${displayText}</span>`}<br>
                                 <em style="color: #666;">${citation.claim}</em>
                             </div>
-                            `;
-                        }).join('')}
+                                `;
+                            }).join('')}
                         ` : '<p>No sources available.</p>'}
                     </div>
                 </div>
             `;
             
             if (data.alternatives.length > 0) {
-                html += `
+            html += `
                     <div class="section">
                         <h3><i class="fas fa-lightbulb"></i> Safer Alternatives</h3>
                         <div class="security-cards">
@@ -528,8 +684,8 @@
                                 </div>
                             `).join('')}
                         </div>
-                    </div>
-                `;
+                </div>
+            `;
             }
             
             html += `
@@ -683,8 +839,8 @@
                     if (match) {
                         positives = parseInt(match[1]);
                         total = parseInt(match[2]);
-                        break;
-                    }
+                            break;
+                        }
                 }
             }
             
@@ -827,7 +983,7 @@
                     vtPenalty = 18;
                 } else if (positives >= 5) {
                     vtPenalty = 12;
-                } else {
+                            } else {
                     vtPenalty = 8;
                 }
                 

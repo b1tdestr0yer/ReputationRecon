@@ -1657,22 +1657,37 @@ Important:
                 data_summary.append(f"Data Sources: {len(security_posture.citations)} citations available")
                 
                 # Build the prompt
-                prompt = f"""You are an experienced Cyber Security/System Administrator with over 20+ years of experience and have the task of assessing if this application should be used and ran on a company laptop or not. Keep the suggestion small and concise.
+                prompt = f"""You are an experienced Cyber Security Manager/CISO with over 20+ years of experience. Your task is to provide a clear, actionable recommendation on whether this application should be allowed on company laptops.
 
-Based on all the collected data below, provide a recommendation on whether this application should be allowed on company laptops. Consider:
+IMPORTANT: Start your response with ONE of these recommendation statuses on its own line:
+- "NOT RECOMMENDED" - if the application should NOT be allowed due to significant security risks
+- "USE WITH CAUTION" - if the application has elevated security concerns requiring additional controls
+- "CONDITIONALLY APPROVED" - if the application is acceptable with standard security controls
+- "RECOMMENDED" - if the application is suitable for deployment
 
-- Security posture and trust score
-- CVE history and active vulnerabilities
-- Vendor reputation and track record
-- Data handling and compliance
-- Deployment controls available
-- VirusTotal analysis results
-- Any documented security incidents
+After the status, provide 2-3 sentences explaining your recommendation based on ALL available data.
 
-Provide a clear, professional recommendation that balances security concerns with business needs.
+Consider these factors (in order of importance for security managers):
+1. CISA KEV entries (actively exploited vulnerabilities) - HIGHEST PRIORITY
+2. Critical and high-severity CVEs, especially version-specific ones
+3. VirusTotal detection rates and threat classifications
+4. Vendor reputation and security track record
+5. Data handling and compliance (SOC 2, ISO 27001, GDPR)
+6. Security incidents and abuse signals
+7. Trust score (use as one factor, not the sole determinant)
+
+CRITICAL: If the text says "not recommended" or "do not allow" or similar, the status MUST be "NOT RECOMMENDED" regardless of trust score.
 
 Collected Data:
 {chr(10).join(data_summary)}
+
+Format your response as:
+[STATUS]
+[2-3 sentence explanation with specific security concerns or positive factors]
+
+Example:
+NOT RECOMMENDED
+This application has 3 CISA KEV entries indicating active exploitation, along with 5 critical CVEs. VirusTotal shows 77% detection rate with threat classification as hacktool. The combination of actively exploited vulnerabilities and high detection rates makes this application unsuitable for company laptops without exceptional business justification and additional security controls.
 
 Write your recommendation:"""
 
@@ -1683,15 +1698,20 @@ Write your recommendation:"""
             except Exception as e:
                 print(f"[AI Synthesizer] ⚠ Error generating suggestion with AI: {e}")
         
-        # Fallback suggestion based on trust score
+        # Fallback suggestion based on multiple factors (not just trust score)
         risk_level = trust_score.risk_level
         score = trust_score.score
+        cve_summary = security_posture.cve_summary
+        cisa_kev_count = cve_summary.cisa_kev_count
+        critical_count = cve_summary.critical_count
         
-        if risk_level == "Critical" or score < 35:
-            return f"Based on the security assessment, {entity_name} by {vendor_name} presents significant security risks (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs, including {security_posture.cve_summary.critical_count} critical vulnerabilities. {security_posture.cve_summary.cisa_kev_count} vulnerabilities are listed in CISA KEV, indicating active exploitation. Recommendation: Do not allow this application on company laptops without additional security controls and management approval."
-        elif risk_level == "High" or score < 55:
-            return f"Based on the security assessment, {entity_name} by {vendor_name} presents elevated security concerns (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs, including {security_posture.cve_summary.critical_count} critical vulnerabilities. Recommendation: Exercise caution when deploying this application on company laptops. Consider implementing additional security controls, ensuring the latest version is used, and obtaining management approval before deployment."
+        # Consider multiple factors for recommendation
+        # CISA KEV is highest priority - if present, likely not recommended
+        if cisa_kev_count > 0 or risk_level == "Critical" or score < 35:
+            return f"NOT RECOMMENDED\nBased on the security assessment, {entity_name} by {vendor_name} presents significant security risks (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {cve_summary.total_cves} CVEs, including {critical_count} critical vulnerabilities. {cisa_kev_count} vulnerabilities are listed in CISA KEV, indicating active exploitation. This application should not be allowed on company laptops without exceptional business justification, additional security controls, and management approval."
+        elif critical_count > 3 or risk_level == "High" or score < 55:
+            return f"USE WITH CAUTION\nBased on the security assessment, {entity_name} by {vendor_name} presents elevated security concerns (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {cve_summary.total_cves} CVEs, including {critical_count} critical vulnerabilities. Exercise caution when deploying this application on company laptops. Consider implementing additional security controls, ensuring the latest version is used, and obtaining management approval before deployment."
         elif risk_level == "Medium" or score < 75:
-            return f"Based on the security assessment, {entity_name} by {vendor_name} has a moderate security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs. Recommendation: This application may be acceptable for company laptops with standard security controls in place. Ensure the application is kept up to date and monitor for new security advisories."
+            return f"CONDITIONALLY APPROVED\nBased on the security assessment, {entity_name} by {vendor_name} has a moderate security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {cve_summary.total_cves} CVEs. This application may be acceptable for company laptops with standard security controls in place. Ensure the application is kept up to date and monitor for new security advisories."
         else:
-            return f"Based on the security assessment, {entity_name} by {vendor_name} demonstrates a relatively good security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {security_posture.cve_summary.total_cves} CVEs. Recommendation: This application appears suitable for deployment on company laptops with standard security controls and regular updates."
+            return f"RECOMMENDED\nBased on the security assessment, {entity_name} by {vendor_name} demonstrates a relatively good security posture (Trust Score: {score}/100, Risk Level: {risk_level}). The application has {cve_summary.total_cves} CVEs. This application appears suitable for deployment on company laptops with standard security controls and regular updates."

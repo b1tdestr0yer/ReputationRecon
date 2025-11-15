@@ -609,6 +609,34 @@ button:active {
     background: #f5f5f5;
 }
 
+/* Recommendation Card Styles */
+.recommendation-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.recommendation-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15) !important;
+}
+
+.recommendation-card.not-recommended {
+    animation: pulse-red 2s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+    0%, 100% { box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2); }
+    50% { box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4); }
+}
+
+.recommendation-card .recommendation-icon {
+    animation: scale-in 0.3s ease-out;
+}
+
+@keyframes scale-in {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
 @media (max-width: 768px) {
     .trust-score-container {
         grid-template-columns: 1fr;
@@ -624,6 +652,15 @@ button:active {
     
     .factors-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .recommendation-card {
+        padding: 20px !important;
+    }
+    
+    .recommendation-card > div:first-child {
+        flex-direction: column;
+        text-align: center;
     }
 }
 
