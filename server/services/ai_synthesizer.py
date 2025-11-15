@@ -80,7 +80,16 @@ class AISynthesizer:
         citations = self._extract_citations(collected_data)
         print(f"[AI Synthesizer] ✓ Extracted {len(citations)} citations")
         
+        # Generate short summary after all data is extracted
+        print(f"[AI Synthesizer] Generating security posture summary...")
+        summary = self._generate_security_posture_summary(
+            entity_name, vendor_name, category,
+            description, usage, vendor_reputation, cve_summary,
+            incidents, data_handling, deployment
+        )
+        
         return SecurityPosture(
+            summary=summary,
             description=description,
             usage=usage,
             vendor_reputation=vendor_reputation,
@@ -526,6 +535,62 @@ Vendor text:
             ))
 
         return cites
+
+    def _generate_security_posture_summary(
+        self,
+        entity_name: str,
+        vendor_name: str,
+        category: SoftwareCategory,
+        description: str,
+        usage: str,
+        vendor_reputation: str,
+        cve_summary: CVESummary,
+        incidents: str,
+        data_handling: str,
+        deployment_controls: str
+    ) -> str:
+        """Generate a short AI summary of the security posture"""
+        if not self.use_ai or not self.model:
+            # Fallback to a simple summary
+            cve_info = f"{cve_summary.total_cves} CVEs" if cve_summary.total_cves > 0 else "no known CVEs"
+            kev_info = f", {cve_summary.cisa_kev_count} in CISA KEV" if cve_summary.cisa_kev_count > 0 else ""
+            return f"{entity_name} by {vendor_name} ({category.value}) has {cve_info}{kev_info}. {vendor_reputation[:100]}..."
+        
+        try:
+            prompt = f"""Generate a very short, concise summary (2-3 sentences maximum, under 200 characters) of the security posture for this software.
+
+Product: {entity_name}
+Vendor: {vendor_name}
+Category: {category.value}
+
+Key Security Information:
+- Description: {description[:200]}
+- Usage: {usage[:200]}
+- Vendor Reputation: {vendor_reputation[:200]}
+- CVEs: {cve_summary.total_cves} total ({cve_summary.critical_count} critical, {cve_summary.high_count} high), {cve_summary.cisa_kev_count} in CISA KEV
+- Incidents: {incidents[:150]}
+- Data Handling: {data_handling[:150]}
+- Deployment Controls: {deployment_controls[:150]}
+
+Write a brief, executive-level summary that captures the overall security posture. Focus on the most critical aspects (CVEs, vendor reputation, data handling). Keep it under 200 characters.
+
+Respond with ONLY the summary text, no labels or prefixes."""
+
+            response = self.model.generate_content(prompt)
+            summary = response.text.strip()
+            # Clean up any extra formatting
+            summary = summary.replace('**', '').replace('*', '').strip()
+            # Limit to 250 characters as a safety measure
+            if len(summary) > 250:
+                summary = summary[:247] + "..."
+            print(f"[AI Synthesizer] ✓ Generated security posture summary: {summary[:100]}...")
+            return summary
+        except Exception as e:
+            print(f"[AI Synthesizer] ✗ Error generating summary: {e}, using fallback")
+            # Fallback summary
+            cve_info = f"{cve_summary.total_cves} CVEs" if cve_summary.total_cves > 0 else "no known CVEs"
+            kev_info = f", {cve_summary.cisa_kev_count} in CISA KEV" if cve_summary.cisa_kev_count > 0 else ""
+            return f"{entity_name} by {vendor_name} ({category.value}) has {cve_info}{kev_info}. {vendor_reputation[:100]}..."
 
 
     # -------------------------------------------------------------------------

@@ -70,6 +70,7 @@ class Alternative(BaseModel):
 
 class SecurityPosture(BaseModel):
     """Security posture summary"""
+    summary: str = Field(..., description="Short AI-generated summary of the security posture")
     description: str = Field(..., description="Product description")
     usage: str = Field(..., description="Primary use cases")
     vendor_reputation: str = Field(..., description="Vendor reputation summary")
