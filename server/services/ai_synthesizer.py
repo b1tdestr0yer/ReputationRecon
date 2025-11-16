@@ -928,71 +928,83 @@ Respond with ONLY the summary text, no labels or prefixes."""
             "trusted", "recognized", "prominent", "large-scale", "enterprise"
         ])
 
+        # Group all CVE-related penalties together
+        cve_penalty = 0
+        cve_details = []
+        
         # Version-specific CVEs are weighted more heavily (more relevant to current version)
         if cve.detected_version and cve.version_specific_cves > 0:
-            # Version-specific CVEs have higher impact
+            # Version-specific CVEs have higher impact (reduced penalties)
             if cve.version_specific_cves > 20:
-                score -= 18
-                factors["high_version_cve_count"] = -18
+                cve_penalty += 8
+                cve_details.append(f"{cve.version_specific_cves} version-specific CVEs")
             elif cve.version_specific_cves > 10:
-                score -= 12
-                factors["moderate_version_cve_count"] = -12
+                cve_penalty += 5
+                cve_details.append(f"{cve.version_specific_cves} version-specific CVEs")
             elif cve.version_specific_cves > 5:
-                score -= 7
-                factors["some_version_cves"] = -7
+                cve_penalty += 3
+                cve_details.append(f"{cve.version_specific_cves} version-specific CVEs")
             else:
-                score -= 4
-                factors["few_version_cves"] = -4
+                cve_penalty += 2
+                cve_details.append(f"{cve.version_specific_cves} version-specific CVEs")
             
-            # Version-specific critical CVEs are very concerning
+            # Version-specific critical CVEs are very concerning (reduced penalties)
             if cve.version_specific_critical > 5:
-                score -= 15
-                factors["many_version_critical_cves"] = -15
+                cve_penalty += 6
+                cve_details.append(f"{cve.version_specific_critical} critical")
             elif cve.version_specific_critical > 0:
-                score -= 9
-                factors["version_critical_cves"] = -9
+                cve_penalty += 4
+                cve_details.append(f"{cve.version_specific_critical} critical")
             
-            # Version-specific high CVEs
+            # Version-specific high CVEs (reduced penalties)
             if cve.version_specific_high > 10:
-                score -= 9
-                factors["many_version_high_cves"] = -9
+                cve_penalty += 4
+                cve_details.append(f"{cve.version_specific_high} high")
             elif cve.version_specific_high > 0:
-                score -= 5
-                factors["version_high_cves"] = -5
-        
-        # Total CVE impact (less weight than version-specific, but still important)
-        if cve.total_cves > 50:
-            score -= 12
-            factors["high_cve_count"] = -12
-        elif cve.total_cves > 20:
-            score -= 7
-            factors["moderate_cve_count"] = -7
-        elif cve.total_cves > 5:
-            score -= 4
-            factors["some_cves"] = -4
-        elif cve.total_cves > 0:
-            score -= 1
-            factors["few_cves"] = -1
+                cve_penalty += 2
+                cve_details.append(f"{cve.version_specific_high} high")
         else:
+            # Total CVE impact (less weight than version-specific, but still important)
+            if cve.total_cves > 50:
+                cve_penalty += 6
+                cve_details.append(f"{cve.total_cves} total CVEs")
+            elif cve.total_cves > 20:
+                cve_penalty += 3
+                cve_details.append(f"{cve.total_cves} total CVEs")
+            elif cve.total_cves > 5:
+                cve_penalty += 2
+                cve_details.append(f"{cve.total_cves} total CVEs")
+            elif cve.total_cves > 0:
+                cve_penalty += 1
+                cve_details.append(f"{cve.total_cves} total CVEs")
+            
+            # Total critical CVEs (less weight if we have version-specific data)
+            if cve.critical_count > 5:
+                if not (cve.detected_version and cve.version_specific_critical > 0):
+                    cve_penalty += 4
+                    cve_details.append(f"{cve.critical_count} critical")
+            elif cve.critical_count > 0:
+                if not (cve.detected_version and cve.version_specific_critical > 0):
+                    cve_penalty += 2
+                    cve_details.append(f"{cve.critical_count} critical")
+
+        # CISA KEV is very serious (reduced penalty)
+        if cve.cisa_kev_count > 0:
+            cve_penalty += 10
+            cve_details.append(f"{cve.cisa_kev_count} CISA KEV")
+        
+        # Apply grouped CVE penalty
+        if cve_penalty > 0:
+            score -= cve_penalty
+            cve_label = "CVE Issues"
+            if cve_details:
+                cve_label += f" ({', '.join(cve_details[:3])})"  # Show first 3 details
+            factors[cve_label] = -cve_penalty
+        elif cve.total_cves == 0:
             # No CVEs is actually positive (but don't over-weight it)
             if not (cve.detected_version and cve.version_specific_cves > 0):
                 factors["no_cves"] = +5
                 score += 5
-
-        # CISA KEV is very serious
-        if cve.cisa_kev_count > 0:
-            score -= 21
-            factors["cisa_kev"] = -21
-
-        # Total critical CVEs (less weight if we have version-specific data)
-        if cve.critical_count > 5:
-            if not (cve.detected_version and cve.version_specific_critical > 0):
-                score -= 9
-                factors["many_critical_cves"] = -9
-        elif cve.critical_count > 0:
-            if not (cve.detected_version and cve.version_specific_critical > 0):
-                score -= 5
-                factors["critical_cves"] = -5
 
         # VirusTotal analysis (enhanced with v3 data and confidence scoring)
         if vt and vt.get("response_code") == 1:
