@@ -851,7 +851,7 @@ Vendor text:
         try:
             # Get bug bounty info from incidents (already included) but also check collected_data
             bug_bounty_info = ""
-            # The incidents string should already include bug bounty info, but we can verify
+            # The incidents string should already include bug bounty info
             
             prompt = f"""Generate a very short, concise summary (2-3 sentences maximum, under 200 characters) of the security posture for this software.
 
@@ -893,7 +893,7 @@ Respond with ONLY the summary text, no labels or prefixes."""
 
 
     # -------------------------------------------------------------------------
-    # TRUST SCORE (same logic, but cleaned)
+    # TRUST SCORE
     # -------------------------------------------------------------------------
     async def calculate_trust_score(
         self, security_posture: SecurityPosture, collected_data: Dict

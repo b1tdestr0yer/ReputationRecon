@@ -13,12 +13,17 @@ class ExportService:
         citations = posture.get("citations", [])
         alternatives = assessment_data.get("alternatives", [])
         
+        # Get pro_mode information
+        pro_mode = assessment_data.get('pro_mode', False)
+        analysis_mode = "PRO Mode (gemini-2.5-pro)" if pro_mode else "Classic Mode"
+        
         md = f"""# Security Assessment Report
 
 ## {assessment_data.get('entity_name', 'Unknown')}
 
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**Data Quality:** {assessment_data.get('data_quality', 'unknown').upper()}
+**Data Quality:** {assessment_data.get('data_quality', 'unknown').upper()}  
+**Analysis Mode:** {analysis_mode}
 
 ---
 
@@ -269,6 +274,13 @@ class ExportService:
         md += f"\n---\n\n## Report Metadata\n\n"
         md += f"- **Assessment Timestamp:** {assessment_data.get('assessment_timestamp', 'N/A')}\n"
         md += f"- **Report Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        md += f"- **Analysis Mode:** {analysis_mode}\n"
+        if assessment_data.get('is_cached'):
+            md += f"- **Source:** Cached Assessment\n"
+            if assessment_data.get('cached_at'):
+                md += f"- **Cached At:** {assessment_data.get('cached_at')}\n"
+            if assessment_data.get('cache_expires_at'):
+                md += f"- **Cache Expires:** {assessment_data.get('cache_expires_at')}\n"
         if assessment_data.get('cache_key'):
             md += f"- **Cache Key:** {assessment_data.get('cache_key')}\n"
         
@@ -285,34 +297,49 @@ class ExportService:
         score = trust.get('score', 0)
         risk_color = "#28a745" if score >= 70 else "#ffc107" if score >= 50 else "#dc3545"
         
+        # Get pro_mode information
+        pro_mode = assessment_data.get('pro_mode', False)
+        analysis_mode = "PRO Mode (gemini-2.5-pro)" if pro_mode else "Classic Mode"
+        
         html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>Security Assessment: {assessment_data.get('entity_name', 'Unknown')}</title>
     <style>
+        @media print {{
+            body {{ margin: 0; background: white; }}
+            .container {{ box-shadow: none; padding: 20px; }}
+            .no-print {{ display: none; }}
+            @page {{ margin: 1.5cm; }}
+        }}
         body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; background: #f5f5f5; }}
-        .container {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .container {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto; }}
         h1 {{ color: #333; border-bottom: 3px solid {risk_color}; padding-bottom: 10px; margin-top: 0; }}
-        h2 {{ color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }}
-        h3 {{ color: #666; margin-top: 20px; }}
+        h2 {{ color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; page-break-after: avoid; }}
+        h3 {{ color: #666; margin-top: 20px; page-break-after: avoid; }}
         .header-info {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
-        .header-info table {{ margin: 0; }}
-        .header-info td {{ border: none; padding: 5px 15px; }}
-        .score-box {{ background: {risk_color}; color: white; padding: 30px; border-radius: 8px; text-align: center; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .header-info table {{ margin: 0; width: 100%; }}
+        .header-info td {{ border: none; padding: 5px 15px; vertical-align: top; }}
+        .header-info td:first-child {{ width: 150px; font-weight: bold; }}
+        .score-box {{ background: {risk_color}; color: white; padding: 30px; border-radius: 8px; text-align: center; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); page-break-inside: avoid; }}
         .score-value {{ font-size: 56px; font-weight: bold; margin: 10px 0; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; page-break-inside: avoid; }}
         th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
         th {{ background-color: #f2f2f2; font-weight: bold; }}
-        .citation {{ margin: 10px 0; padding: 12px; background: #f9f9f9; border-left: 4px solid #007bff; border-radius: 4px; }}
+        .citation {{ margin: 10px 0; padding: 12px; background: #f9f9f9; border-left: 4px solid #007bff; border-radius: 4px; page-break-inside: avoid; }}
         .vendor-citation {{ border-left-color: #28a745; }}
         .independent-citation {{ border-left-color: #ffc107; }}
         .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
-        .section-box {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+        .section-box {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; page-break-inside: avoid; }}
+        .print-instruction {{ background: #e7f3ff; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; color: #004085; }}
     </style>
 </head>
 <body>
     <div class="container">
+    <div class="print-instruction no-print">
+        <strong>To save as PDF:</strong> Use your browser's Print function (Ctrl+P / Cmd+P) and choose "Save as PDF" as the destination.
+    </div>
     <h1>Security Assessment Report</h1>
     
     <div class="header-info">
@@ -321,6 +348,7 @@ class ExportService:
             <tr><td><strong>Vendor:</strong></td><td>{assessment_data.get('vendor_name', 'Unknown')}</td></tr>
             <tr><td><strong>Category:</strong></td><td>{assessment_data.get('category', 'Unknown')}</td></tr>
             <tr><td><strong>Data Quality:</strong></td><td>{assessment_data.get('data_quality', 'unknown').upper()}</td></tr>
+            <tr><td><strong>Analysis Mode:</strong></td><td>{analysis_mode}</td></tr>
             <tr><td><strong>Generated:</strong></td><td>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td></tr>
         </table>
     </div>
@@ -563,7 +591,15 @@ class ExportService:
     <div class="footer">
         <h3>Report Metadata</h3>
         <p><strong>Assessment Timestamp:</strong> {assessment_data.get('assessment_timestamp', 'N/A')}<br>
-        <strong>Report Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>"""
+        <strong>Report Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
+        <strong>Analysis Mode:</strong> {analysis_mode}<br>"""
+        
+        if assessment_data.get('is_cached'):
+            html += f"<strong>Source:</strong> Cached Assessment<br>"
+            if assessment_data.get('cached_at'):
+                html += f"<strong>Cached At:</strong> {assessment_data.get('cached_at')}<br>"
+            if assessment_data.get('cache_expires_at'):
+                html += f"<strong>Cache Expires:</strong> {assessment_data.get('cache_expires_at')}<br>"
         
         if assessment_data.get('cache_key'):
             html += f"<strong>Cache Key:</strong> {assessment_data.get('cache_key')}<br>"

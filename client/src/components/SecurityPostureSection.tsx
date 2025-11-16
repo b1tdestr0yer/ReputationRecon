@@ -13,7 +13,7 @@ const SecurityPostureSection = ({ securityPosture }: SecurityPostureSectionProps
   }
 
   return (
-    <div className="section">
+    <div className="section" style={{ marginTop: '30px' }}>
       <h3>
         <i className="fas fa-shield-alt"></i> Security Posture
       </h3>

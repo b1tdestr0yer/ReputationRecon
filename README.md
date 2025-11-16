@@ -1,408 +1,372 @@
-# ReputationRecon - AI-Powered Security Assessment Tool
+# Secure Your App Health 🔒
 
-A comprehensive security assessment platform that generates CISO-ready trust briefs for applications in minutes. Built for security teams and CISOs who need accurate, concise, and source-grounded snapshots of a product's security posture.
+**AI-Powered Security Assessment Platform for Modern CISOs**
 
-## Features
+Secure Your App Health is an intelligent security assessment tool that generates comprehensive, CISO-ready trust briefs for applications in minutes. Built for Junction Hackathon 2025, this platform helps security teams make informed decisions by providing accurate, transparent, and source-grounded security assessments.
 
-- ✅ **Entity Resolution** - Automatically resolves product and vendor identity from minimal input
-- ✅ **Software Classification** - Categorizes applications into clear taxonomy (File Sharing, GenAI, SaaS CRM, etc.)
-- ✅ **Security Posture Analysis** - Comprehensive assessment including:
-  - Product description and usage
-  - Vendor reputation
-  - CVE trend summaries (with CISA KEV integration)
-  - Security incidents and abuse signals
-  - Data handling and compliance information
-  - Deployment and admin controls
-- ✅ **Trust Score** - Transparent 0-100 trust/risk score with rationale and confidence
-- ✅ **Safer Alternatives** - Suggests 1-2 safer alternatives with rationale
-- ✅ **Evidence & Citations** - All claims are source-grounded with proper citations
-- ✅ **Local Caching** - SQLite-based cache with timestamps for reproducibility
-- ✅ **Multiple Interfaces** - REST API, CLI, and Web UI with compare-view
-- ✅ **VirusTotal Integration** - Hash-based file analysis using v3 API with enhanced risk assessment
-- ✅ **Data-Driven Analysis** - No hardcoded vendor/tool lists; all assessments based on real-time data
-- ✅ **Enhanced Risk Detection** - Advanced false positive detection and abuse pattern recognition
+**👥 Team**: We are a team of 3 students from EPFL (École Polytechnique Fédérale de Lausanne).
 
-## Prerequisites
+## 🎯 The Problem We Solve
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- (Optional) VirusTotal API key for hash analysis (v3 API)
-- (Optional) Google Gemini API key for enhanced AI synthesis
+Security teams and CISOs face an overwhelming challenge: evaluating the security posture of new applications quickly and accurately. Traditional methods are time-consuming, require extensive manual research, and often lack transparency in their scoring methodologies. Secure Your App Health solves this by combining AI-powered synthesis with real-time threat intelligence to deliver actionable security assessments in minutes.
 
-## Installation
+## ✨ Key Features
 
-1. **Clone or navigate to the project directory:**
+### 🔍 **Intelligent Entity Resolution**
+Automatically resolves product and vendor information from minimal input—just provide a product name, vendor, URL, or even a file hash, and we'll do the rest.
+
+### 📊 **Transparent Trust Scoring**
+Every assessment includes a clear 0-100 trust score with detailed rationale, confidence levels, and a complete breakdown of contributing factors. No black boxes—you can see exactly why an application received its score.
+
+### 🛡️ **Comprehensive Security Analysis**
+- **CVE Analysis**: Real-time vulnerability tracking with CISA KEV integration
+- **VirusTotal Integration**: Deep file hash analysis with multi-engine detection
+- **Security Posture**: Vendor reputation, data handling, compliance, and incident tracking
+- **Risk Assessment**: AI-powered analysis of security signals and threat patterns
+
+### 🤖 **Dual AI Modes**
+- **Classic Mode**: Fast, efficient assessments using standard AI models
+- **PRO Mode**: Enhanced analysis using Gemini 2.5 Pro for deeper insights and higher quality synthesis
+
+### 📚 **Source-Grounded Claims**
+Every security claim is backed by proper citations. We distinguish between vendor-stated information and independent security research, giving you the full picture.
+
+### 💾 **Smart Caching System**
+All assessments are cached locally with metadata, including AI mode used. Classic and PRO mode assessments are stored separately, ensuring accurate results. Cache browser lets you search, filter, and revisit previous assessments.
+
+### 📄 **Professional Export Options**
+Export assessment reports in multiple formats:
+- **Markdown**: Clean, structured reports for documentation
+- **PDF**: Print-ready HTML that opens in your browser for easy PDF generation
+
+### 🎨 **Modern Web Interface**
+Beautiful, intuitive UI with:
+- Dark mode by default for comfortable viewing
+- Interactive trust score visualizations
+- Collapsible sections for detailed information
+- Real-time progress indicators
+- Visual CVE and security factor breakdowns
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Python 3.8+** (3.9+ recommended)
+- **Node.js 16+** (for the frontend)
+- **VirusTotal API Key** (optional but recommended for hash analysis)
+- **Google Gemini API Key** (optional, enables PRO mode features)
+
+### Installation
+
+1. **Clone the repository:**
    ```bash
+   git clone <repository-url>
    cd ReputationRecon
    ```
 
-2. **Create a virtual environment (recommended):**
+2. **Set up the backend:**
    ```bash
+   # Create virtual environment
    python -m venv venv
-   ```
-
-3. **Activate the virtual environment:**
    
-   On Windows:
-   ```bash
+   # Activate virtual environment
+   # Windows:
    venv\Scripts\activate
-   ```
-   
-   On macOS/Linux:
-   ```bash
+   # macOS/Linux:
    source venv/bin/activate
-   ```
-
-4. **Install dependencies:**
-   ```bash
+   
+   # Install dependencies
    pip install -r requirements.txt
    ```
 
-5. **Set environment variables (optional):**
-   
-   You can set environment variables directly or use a `.env` file in the project root:
+3. **Set up the frontend:**
    ```bash
-   # .env file format
-   VIRUSTOTAL_API_KEY=your_api_key_here
-   GEMINI_API_KEY=your_api_key_here
+   cd client
+   npm install
+   ```
+
+4. **Configure API keys (optional):**
+   
+   Create a `.env` file in the project root:
+   ```bash
+   VIRUSTOTAL_API_KEY=your_virustotal_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
    
-   Or set them directly:
+   Or set them as environment variables:
    ```bash
    # Windows PowerShell
-   $env:VIRUSTOTAL_API_KEY="your_api_key_here"
-   $env:GEMINI_API_KEY="your_api_key_here"  # Optional, for enhanced AI
+   $env:VIRUSTOTAL_API_KEY="your_key_here"
+   $env:GEMINI_API_KEY="your_key_here"
    
-   # Linux/Mac
-   export VIRUSTOTAL_API_KEY="your_api_key_here"
-   export GEMINI_API_KEY="your_api_key_here"
+   # macOS/Linux
+   export VIRUSTOTAL_API_KEY="your_key_here"
+   export GEMINI_API_KEY="your_key_here"
+   ```
+
+5. **Start the backend server:**
+   ```bash
+   # From project root
+   python main.py
    ```
    
-   See `SETUP_API_KEYS.md` for detailed setup instructions.
+   Or use the startup script:
+   ```bash
+   # Linux/Mac
+   chmod +x run_server.sh
+   ./run_server.sh
+   ```
 
-## Running the Server
+6. **Start the frontend development server:**
+   ```bash
+   cd client
+   npm run dev
+   ```
 
-### Option 1: Using the shell script (Linux/Mac)
-```bash
-chmod +x run_server.sh
-./run_server.sh
-```
+The application will be available at:
+- **Frontend**: http://localhost:5173 (or the port Vite assigns)
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
 
-This script will:
-- Create a virtual environment if it doesn't exist
-- Install dependencies automatically
-- Start the server with auto-reload
+## 📖 Usage
 
-### Option 2: Using Python directly
-```bash
-python main.py
-```
+### Web Interface
 
-### Option 3: Using uvicorn directly
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+1. Navigate to the web interface
+2. Enter a product name and vendor (or just a URL)
+3. Optionally provide a file hash for deeper analysis
+4. Toggle PRO Mode for enhanced AI analysis (slower but higher quality)
+5. Click "Assess Application" to generate a comprehensive security report
 
-The server will start on `http://localhost:8000`
+The interface provides:
+- Visual trust score gauge with color-coded risk levels
+- Interactive security posture sections
+- CVE analysis with severity breakdowns
+- VirusTotal analysis results (if hash provided)
+- Safer alternative suggestions
+- Complete source citations
+- Export options for reports
 
-## Usage
+### API Usage
 
-### Web UI
-
-Access the web interface at: `http://localhost:8000/static/index.html`
-
-Features:
-- **Single Application Assessment** - Assess individual applications with product name, vendor, and optional hash
-- **Side-by-Side Comparison** - Compare multiple applications simultaneously
-- **Interactive Trust Score Gauge** - Circular gauge visualization with color-coded risk levels
-- **Key Factors Display** - Card-based grid showing top contributing factors to the trust score
-- **Collapsible Security Posture Cards** - Expandable sections for:
-  - Description
-  - Usage
-  - Vendor Reputation
-  - Data Handling
-  - Deployment Controls
-  - Incidents & Abuse
-- **CVE Analysis** - Visual breakdown of Common Vulnerabilities and Exposures
-- **Professional Loading Animation** - Step-by-step progress indicators during assessment
-- **Citations and Evidence** - Source-grounded claims with proper attribution
-- **Export Functionality** - Export reports in multiple formats
-
-### CLI
+#### Basic Assessment
 
 ```bash
-# Assess by product name
-python cli.py --product "Slack" --vendor "Salesforce"
-
-# Assess by URL
-python cli.py --url "https://slack.com"
-
-# Assess with hash
-python cli.py --product "MyApp" --hash "abc123..."
-
-# Output as JSON
-python cli.py --product "Slack" --json
-
-# Compare multiple applications
-python cli.py --compare --product "Slack" --product "Teams"
+curl -X POST http://localhost:8000/api/assess \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_name": "Slack",
+    "vendor_name": "Salesforce",
+    "pro_mode": false
+  }'
 ```
 
-### API Endpoints
+#### Assessment with Hash
 
-#### Assess Application
-- **POST** `/api/assess` - Perform security assessment
-  - **Rate Limit:** 10 requests per minute
-  - **Request Body:**
-    ```json
-    {
-      "product_name": "Slack",
-      "vendor_name": "Salesforce",
-      "url": "https://slack.com",
-      "hash": "optional_hash_here"
-    }
-    ```
-  - **Example using curl:**
-    ```bash
-    curl -X POST http://localhost:8000/api/assess \
-      -H "Content-Type: application/json" \
-      -d '{
-        "product_name": "Slack",
-        "vendor_name": "Salesforce",
-        "url": "https://slack.com"
-      }'
-    ```
-
-#### Compare Applications
-- **POST** `/api/compare` - Compare multiple applications
-  - **Rate Limit:** 5 requests per minute
-  - **Request Body:** Array of assessment requests
-    ```json
-    [
-      {
-        "product_name": "Slack",
-        "vendor_name": "Salesforce"
-      },
-      {
-        "product_name": "Microsoft Teams",
-        "vendor_name": "Microsoft"
-      }
-    ]
-    ```
-
-#### VirusTotal Hash Search
-- **GET** `/api/virustotal/{hash}` - Search VirusTotal v3 API by hash (MD5, SHA1, or SHA256)
-  - **Rate Limit:** 4 requests per minute
-  - **Returns:** Enhanced risk data including:
-    - Detection statistics
-    - Reputation scores
-    - Threat classifications
-    - Community votes
-    - False positive indicators
-    - Abuse pattern detection
-  - **Example:**
-    ```bash
-    curl http://localhost:8000/api/virustotal/44d88612fea8a8f36de82e1278abb02f
-    ```
-
-#### Export Reports
-- **POST** `/api/export/{format}` - Export assessment reports
-  - **Formats:** `json`, `pdf`, `html`
-  - **Rate Limit:** 10 requests per minute
-
-#### Configuration Status
-- **GET** `/api/config/status` - Check API key configuration status
-
-## Response Format
-
-### Assessment Response
-
-```json
-{
-  "entity_name": "Slack",
-  "vendor_name": "Salesforce",
-  "category": "Collaboration",
-  "security_posture": {
-    "description": "Product information...",
-    "usage": "Primary use case: Collaboration...",
-    "vendor_reputation": "Vendor reputation summary...",
-    "cve_summary": {
-      "total_cves": 5,
-      "critical_count": 1,
-      "high_count": 2,
-      "recent_trend": "stable",
-      "cisa_kev_count": 0,
-      "recent_cves": []
-    },
-    "incidents_abuse": "No significant incidents found...",
-    "data_handling": "Data handling information...",
-    "deployment_controls": "Deployment information...",
-    "citations": [
-      {
-        "source": "https://slack.com/security",
-        "source_type": "vendor",
-        "claim": "Vendor security information",
-        "is_vendor_stated": true,
-        "timestamp": "2024-01-01T00:00:00"
-      }
-    ]
-  },
-  "trust_score": {
-    "score": 75,
-    "risk_level": "Low",
-    "confidence": 0.8,
-    "rationale": "Trust Score: 75/100 (Low Risk)...",
-    "factors": {
-      "vendor_transparency": 10,
-      "data_handling": 5
-    }
-  },
-  "alternatives": [
-    {
-      "name": "Element",
-      "vendor": "Element",
-      "rationale": "Open-source, end-to-end encrypted...",
-      "trust_score": 80
-    }
-  ],
-  "assessment_timestamp": "2024-01-01T00:00:00",
-  "data_quality": "sufficient",
-  "cache_key": "abc123..."
-}
+```bash
+curl -X POST http://localhost:8000/api/assess \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_name": "MyApp",
+    "vendor_name": "Vendor Inc",
+    "hash": "abc123def456...",
+    "pro_mode": true
+  }'
 ```
 
-## Data Sources
+#### Cache Search
 
-The system collects data from multiple high-signal sources:
+```bash
+curl "http://localhost:8000/api/cache/search?product_name=Slack&limit=10"
+```
 
-- **Vendor Security Pages** - PSIRT pages, security overviews
-- **Terms of Service** - Data Processing Agreements, privacy policies
-- **CVE Databases** - Common Vulnerabilities and Exposures (NVD API v2)
-- **CISA KEV** - Known Exploited Vulnerabilities catalog
-- **VirusTotal v3 API** - Comprehensive file hash analysis with:
-  - Multi-engine detection statistics
-  - Reputation scoring
-  - Threat classification
-  - Community insights
-  - Sandbox verdicts
-  - Behavioral analysis
-- **Security Advisories** - CERT notices, vendor advisories
-- **CIRCL Hashlookup** - File information based on hash
+## 🔬 How It Works
 
-**Note:** All assessments are data-driven. The system does not rely on hardcoded vendor or tool lists, ensuring assessments are based on real-time threat intelligence and security signals.
+### Assessment Pipeline
 
-## Project Structure
+1. **Entity Resolution**: AI resolves product and vendor information from minimal input
+2. **Data Collection**: Aggregates data from multiple security sources:
+   - CVE databases (NVD API)
+   - CISA KEV catalog
+   - VirusTotal (for hash analysis)
+   - Vendor security pages
+   - Security advisories
+   - Bug bounty platforms
+3. **AI Synthesis**: Analyzes collected data using Gemini AI to generate comprehensive security posture
+4. **Trust Scoring**: Calculates transparent 0-100 trust score with detailed factor breakdown
+5. **Alternative Suggestions**: Identifies safer alternatives when risks are detected
+6. **Caching**: Stores results with full metadata for reproducibility
+
+### Trust Score Calculation
+
+The trust score is calculated using a transparent algorithm:
+- **Starting Score**: 50/100 (neutral baseline)
+- **CVE Penalties**: Based on total CVEs, version-specific CVEs, critical severity, and CISA KEV entries
+- **VirusTotal Analysis**: Weighted by confidence, considers detection counts, reputation, and trusted vendor signals
+- **Positive Factors**: Bonuses for transparency, data handling compliance, deployment controls
+- **Vendor Bonus**: Adjustments for established vendors with strong security track records
+- **Confidence Score**: Reflects data quality and completeness
+
+All values are fine-tuned by AI training on real datasets. See the Help page in the web interface for complete methodology.
+
+## 📊 Data Sources
+
+Secure Your App Health aggregates information from trusted security sources:
+
+- **National Vulnerability Database (NVD)**: CVE data and CVSS scores
+- **CISA KEV**: Known Exploited Vulnerabilities catalog
+- **VirusTotal v3 API**: Multi-engine malware detection and reputation scoring
+- **Vendor Security Pages**: Official PSIRT pages and security documentation
+- **Security Advisories**: CERT notices and vendor advisories
+- **Bug Bounty Platforms**: Public vulnerability disclosures
+- **CIRCL Hashlookup**: File hash and metadata information
+
+All assessments are data-driven—no hardcoded vendor lists or predetermined scores.
+
+## 🏗️ Architecture
 
 ```
 ReputationRecon/
-├── main.py                      # FastAPI application entry point
-├── cli.py                       # Command-line interface
-├── config.py                    # Configuration management
-├── requirements.txt             # Python dependencies
-├── run_server.sh               # Server startup script (Linux/Mac)
-├── setup_env.sh                # Environment setup script
-├── setup_env.ps1               # Environment setup script (Windows)
-├── SETUP_API_KEYS.md           # API key setup instructions
-├── static/
-│   ├── index.html              # Web UI
-│   └── styles.css              # CSS styles (separated from HTML)
-├── server/
-│   ├── __init__.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   └── routing.py          # API routes and endpoints
-│   ├── dtos/
-│   │   ├── __init__.py
-│   │   ├── AppDetails.py       # Legacy DTO
-│   │   ├── AssessmentRequest.py
-│   │   └── AssessmentResponse.py
-│   └── services/
-│       ├── __init__.py
-│       ├── cache.py            # SQLite cache implementation
-│       ├── data_collectors.py   # Data collection from various sources
-│       ├── classifier.py        # Software taxonomy classification
-│       ├── ai_synthesizer.py    # AI-powered synthesis engine
-│       ├── assessment_service.py # Main assessment orchestration
-│       └── export_service.py    # Report export functionality
-└── README.md
+├── server/                 # Backend FastAPI application
+│   ├── api/               # REST API endpoints
+│   ├── services/          # Core business logic
+│   │   ├── assessment_service.py    # Main orchestration
+│   │   ├── ai_synthesizer.py        # AI-powered synthesis
+│   │   ├── data_collectors.py       # Multi-source data collection
+│   │   ├── cache.py                 # SQLite caching system
+│   │   └── export_service.py        # Report generation
+│   └── dtos/              # Data transfer objects
+├── client/                # React + TypeScript frontend
+│   └── src/
+│       ├── components/    # UI components
+│       ├── pages/         # Page components
+│       └── services/      # API client
+└── assessments_cache.db   # Local SQLite cache
 ```
 
-## Judging Criteria Alignment
+## 🎨 Features Deep Dive
 
-This implementation addresses all judging criteria:
+### PRO Mode vs Classic Mode
 
-- **Entity Resolution & Categorization (20%)** ✅
-  - Automatic entity and vendor resolution
-  - Software taxonomy classification
+- **Classic Mode**: Fast assessments using efficient AI models. Perfect for quick evaluations.
+- **PRO Mode**: Enhanced analysis using Gemini 2.5 Pro. Slower but provides:
+  - Deeper security insights
+  - More comprehensive threat analysis
+  - Enhanced context understanding
+  - Higher quality synthesis
 
-- **Evidence & Citation Quality (24%)** ✅
-  - All claims are source-grounded
-  - Vendor-stated vs. independent claim labeling
-  - Multiple high-signal sources
+Both modes are cached separately, so you can compare results for the same application.
 
-- **Security Posture Synthesis (12%)** ✅
-  - Comprehensive security analysis
-  - CVE trends, incidents, data handling, deployment controls
+### Cache Browser
 
-- **Trust/Risk Score Transparency (8%)** ✅
-  - 0-100 score with detailed rationale
-  - Confidence levels
-  - Factor breakdown
+Browse and search previous assessments:
+- Filter by product name, vendor, or hash
+- Filter by trust score range
+- See AI mode used for each assessment
+- Click any result to reload it instantly
 
-- **Alternatives & Quick Compare (6%)** ✅
-  - Safer alternative suggestions
-  - Side-by-side comparison endpoint and UI
+### Export Functionality
 
-- **Technical Execution & Resilience (15%)** ✅
-  - Local caching with timestamps
-  - Error handling
-  - Rate limiting
-  - Reproducibility
+- **Markdown**: Clean, structured format perfect for documentation
+- **PDF**: Print-ready HTML that opens in browser. Use Ctrl+P / Cmd+P to save as PDF
 
-- **Problem Fit & Clarity (15%)** ✅
-  - CISO-ready brief format
-  - Clear, concise output
-  - Multiple interfaces (API, CLI, Web UI)
+All exports include:
+- Complete assessment data
+- All security factors and scores
+- Full source citations
+- Metadata including AI mode and cache information
 
-## Interactive API Documentation
+## 🛠️ Development
 
-FastAPI provides automatic interactive API documentation:
+### Running in Development Mode
 
-- **Swagger UI:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
-
-## Caching
-
-Assessments are cached in a local SQLite database (`assessments_cache.db`) with timestamps. This enables:
-- Faster repeated assessments
-- Reproducibility
-- Offline access to previous assessments
-
-Cache can be cleared programmatically or by deleting the database file.
-
-## Development
-
-To run in development mode with auto-reload:
+**Backend with auto-reload:**
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Troubleshooting
+**Frontend with hot-reload:**
+```bash
+cd client
+npm run dev
+```
 
-- **Port already in use:** Change the port in `main.py` or use `--port` flag with uvicorn
-- **Import errors:** Make sure you've activated your virtual environment and installed all dependencies
-- **Rate limit errors:** The API has rate limits per endpoint (see endpoint documentation)
-- **API key errors:** 
-  - Ensure environment variables are set if using VirusTotal or Gemini features
-  - Check `SETUP_API_KEYS.md` for detailed setup instructions
-  - Use `/api/config/status` endpoint to verify API key configuration
-- **Cache issues:** Delete `assessments_cache.db` to clear the cache
-- **Web UI not loading:** Ensure the server is running and access via `http://localhost:8000/static/index.html`
-- **CSS not loading:** Verify that `static/styles.css` exists and the server is serving static files correctly
+### Testing the API
 
-## License
+Visit http://localhost:8000/docs for interactive API documentation with Swagger UI.
 
-This project is part of a security assessment challenge.
+### Project Dependencies
 
-## Contributing
+**Backend:**
+- FastAPI - Modern web framework
+- Google Gemini AI - AI synthesis engine
+- SQLite - Local caching
+- httpx - HTTP client for API calls
 
-This is a challenge submission. For questions or issues, please refer to the challenge guidelines.
+**Frontend:**
+- React 18 - UI framework
+- TypeScript - Type safety
+- Vite - Fast build tool
+- React Router - Navigation
+
+See `requirements.txt` and `client/package.json` for complete dependency lists.
+
+## 🐛 Troubleshooting
+
+**Port already in use:**
+```bash
+# Change port in main.py or use:
+uvicorn main:app --reload --port 8001
+```
+
+**API key errors:**
+- Verify environment variables are set correctly
+- Check `/api/config/status` endpoint for configuration status
+- Some features work without API keys, but hash analysis requires VirusTotal
+
+**Cache issues:**
+- Delete `assessments_cache.db` to reset cache
+- Cache automatically migrates old entries on server restart
+
+**Frontend not loading:**
+- Ensure backend is running on port 8000
+- Check browser console for errors
+- Verify Vite dev server is running on correct port
+
+## 📝 API Documentation
+
+Full API documentation is available at:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Main Endpoints
+
+- `POST /api/assess` - Perform security assessment
+- `GET /api/cache/search` - Search cached assessments
+- `POST /api/export/{format}` - Export reports (markdown, pdf)
+- `GET /api/config/status` - Check API key configuration
+
+All endpoints include rate limiting. See API docs for details.
+
+## 🤝 Contributing
+
+This project was developed for Junction Hackathon 2025. We welcome feedback and improvements!
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🏆 Junction Hackathon 2025
+
+Secure Your App Health was built for Junction Hackathon 2025 by a team of 3 students from EPFL (École Polytechnique Fédérale de Lausanne), focusing on solving real-world security assessment challenges with AI-powered solutions.
+
+## 🙏 Acknowledgments
+
+- Google Gemini AI for powerful synthesis capabilities
+- VirusTotal for comprehensive file analysis
+- NVD and CISA for vulnerability intelligence
+- All the security researchers and organizations that maintain public security data
+
+---
+
+**Built with ❤️ for Junction Hackathon 2025**
