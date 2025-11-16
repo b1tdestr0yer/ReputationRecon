@@ -182,21 +182,189 @@ const SingleAssessmentForm = ({
       </div>
 
       <div className="form-group">
-        <label htmlFor="pro-mode" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            id="pro-mode"
-            checked={proMode}
-            onChange={(e) => setProMode(e.target.checked)}
-            style={{ cursor: 'pointer' }}
-          />
-          <span>
-            <strong>PRO Mode</strong> - Use gemini-2.5-pro for all AI operations (higher quality, slower)
-          </span>
-        </label>
-        <small style={{ display: 'block', marginTop: '4px', color: '#666', marginLeft: '24px' }}>
-          Note: Security Recommendation always uses PRO model regardless of this setting
-        </small>
+        <div style={{
+          padding: '20px',
+          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
+          border: '2px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: '12px',
+          transition: 'all 0.3s ease',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Animated background glow when checked */}
+          {proMode && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+              animation: 'fadeIn 0.3s ease',
+              pointerEvents: 'none'
+            }}></div>
+          )}
+          
+          <label 
+            htmlFor="pro-mode" 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '16px', 
+              cursor: 'pointer',
+              position: 'relative',
+              zIndex: 1
+            }}
+          >
+            {/* Custom checkbox */}
+            <div style={{
+              position: 'relative',
+              width: '28px',
+              height: '28px',
+              flexShrink: 0
+            }}>
+              <input
+                type="checkbox"
+                id="pro-mode"
+                checked={proMode}
+                onChange={(e) => setProMode(e.target.checked)}
+                style={{
+                  position: 'absolute',
+                  opacity: 0,
+                  width: '100%',
+                  height: '100%',
+                  cursor: 'pointer',
+                  zIndex: 2
+                }}
+              />
+              <div
+                className="custom-checkbox"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '8px',
+                  border: `3px solid ${proMode ? '#667eea' : 'var(--border-color)'}`,
+                  background: proMode 
+                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                    : 'var(--input-bg)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  position: 'relative',
+                  boxShadow: proMode 
+                    ? '0 4px 12px rgba(102, 126, 234, 0.4), 0 2px 6px rgba(118, 75, 162, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.3)'
+                    : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  transform: proMode ? 'scale(1.05)' : 'scale(1)'
+                }}
+              >
+                {proMode && (
+                  <i 
+                    className="fas fa-check" 
+                    style={{
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      animation: 'checkMarkIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)'
+                    }}
+                  ></i>
+                )}
+                
+                {/* Glowing ring when checked */}
+                {proMode && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: '-4px',
+                    borderRadius: '12px',
+                    border: '2px solid rgba(102, 126, 234, 0.5)',
+                    animation: 'pulse-ring 2s ease-in-out infinite',
+                    pointerEvents: 'none'
+                  }}></div>
+                )}
+              </div>
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '4px'
+              }}>
+                <span style={{
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: proMode ? '#667eea' : 'var(--text-primary)',
+                  transition: 'color 0.3s ease',
+                  letterSpacing: '0.3px'
+                }}>
+                  PRO Mode
+                </span>
+                {proMode && (
+                  <span style={{
+                    padding: '2px 8px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    borderRadius: '12px',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    animation: 'fadeIn 0.3s ease',
+                    boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)'
+                  }}>
+                    Active
+                  </span>
+                )}
+              </div>
+              <span style={{
+                fontSize: '14px',
+                color: 'var(--text-secondary)',
+                lineHeight: '1.5'
+              }}>
+                Use gemini-2.5-pro for all AI operations <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>(higher quality, slower)</span>
+              </span>
+            </div>
+          </label>
+          
+          {/* Elegant note */}
+          <div style={{
+            marginTop: '16px',
+            padding: '14px 18px',
+            background: proMode 
+              ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%)'
+              : 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)',
+            borderLeft: '3px solid #667eea',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            transition: 'all 0.3s ease',
+            position: 'relative',
+            zIndex: 1,
+            marginLeft: '44px'
+          }}>
+            <i 
+              className="fas fa-info-circle" 
+              style={{ 
+                color: '#667eea',
+                fontSize: '16px',
+                marginTop: '2px',
+                flexShrink: 0,
+                filter: 'drop-shadow(0 1px 2px rgba(102, 126, 234, 0.3))'
+              }}
+            ></i>
+            <span style={{ 
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              fontStyle: 'italic'
+            }}>
+              <strong style={{ color: 'var(--text-primary)', fontStyle: 'normal' }}>Note:</strong> Security Recommendation always uses PRO model regardless of this setting
+            </span>
+          </div>
+        </div>
       </div>
 
       <button type="button" onClick={handleButtonClick}>

@@ -65,13 +65,3 @@ export interface AssessmentResponse {
   assessment_timestamp?: string
 }
 
-export interface CompareRequest {
-  product_name: string | null
-  vendor_name: string | null
-  pro_mode?: boolean
-}
-
-export interface CompareResponse {
-  assessments: AssessmentResponse[]
-}
-

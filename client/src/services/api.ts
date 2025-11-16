@@ -1,4 +1,4 @@
-import { AssessmentResponse, CompareRequest, CompareResponse } from '../types'
+import { AssessmentResponse } from '../types'
 
 const API_BASE = '/api'
 
@@ -89,25 +89,6 @@ export const assessApplication = async (
       hash: normalizedHash,
       pro_mode: proMode,
     }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Server error: ${response.status} - ${errorText}`)
-  }
-
-  return response.json()
-}
-
-export const compareApplications = async (
-  requests: CompareRequest[]
-): Promise<CompareResponse> => {
-  const response = await fetch(`${API_BASE}/compare`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requests),
   })
 
   if (!response.ok) {

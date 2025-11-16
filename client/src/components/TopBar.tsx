@@ -7,6 +7,7 @@ const TopBar = () => {
   const location = useLocation()
 
   const isCachePage = location.pathname === '/cache'
+  const isHelpPage = location.pathname === '/help'
 
   return (
     <div className="top-bar">
@@ -16,7 +17,18 @@ const TopBar = () => {
           <span>ReputationRecon</span>
         </div>
         <div className="top-bar-actions">
-          {!isCachePage && (
+          {!isHelpPage && (
+            <button 
+              className="cache-browser-btn" 
+              onClick={() => navigate('/help')} 
+              title="How we calculate trust scores"
+              style={{ background: 'linear-gradient(135deg, #6c757d 0%, #5a6268 100%)' }}
+            >
+              <i className="fas fa-info-circle"></i>
+              <span>Help</span>
+            </button>
+          )}
+          {!isCachePage && !isHelpPage && (
             <button className="cache-browser-btn" onClick={() => navigate('/cache')} title="Browse cache">
               <i className="fas fa-database"></i>
               <span>Browse Cache</span>
