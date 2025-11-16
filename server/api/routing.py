@@ -9,7 +9,7 @@ from server.services.assessment_service import AssessmentService
 from server.services.export_service import ExportService
 import httpx
 import os
-from typing import List
+from typing import List, Optional
 import config
 import json
 
@@ -300,6 +300,56 @@ async def compare_applications(requests: List[AssessmentRequest], request: Reque
         raise HTTPException(
             status_code=500,
             detail=f"Error during comparison: {str(e)}"
+        )
+
+
+@router.get(
+    "/cache/search",
+    summary="Search cached assessments",
+    description="Search through cached assessment data by product name, vendor, hash, or trust score",
+    responses={
+        200: {"description": "Search results"},
+        500: {"description": "Search error"},
+    }
+)
+@limiter.limit("20/minute")
+async def search_cache(
+    request: Request,
+    product_name: Optional[str] = Query(None, description="Search by product name (partial match)"),
+    vendor_name: Optional[str] = Query(None, description="Search by vendor name (partial match)"),
+    hash: Optional[str] = Query(None, description="Search by hash (partial match)"),
+    min_trust_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum trust score (0-100)"),
+    max_trust_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum trust score (0-100)"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of results")
+) -> JSONResponse:
+    """
+    Search cached assessments.
+    
+    Supports searching by product name, vendor name, hash, and filtering by trust score range.
+    """
+    print(f"\n[API] GET /api/cache/search - Request from {request.client.host if request else 'unknown'}")
+    print(f"[API] Search params: product={product_name}, vendor={vendor_name}, hash={hash}, score_range={min_trust_score}-{max_trust_score}")
+    
+    try:
+        from server.services.cache import AssessmentCache
+        cache = AssessmentCache()
+        results = cache.search(
+            product_name=product_name,
+            vendor_name=vendor_name,
+            hash=hash,
+            min_trust_score=min_trust_score,
+            max_trust_score=max_trust_score,
+            limit=limit
+        )
+        print(f"[API] ✓ Search complete, found {len(results)} results")
+        return JSONResponse(status_code=200, content={'results': results, 'count': len(results)})
+    except Exception as e:
+        print(f"[API] ✗ ERROR during search: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during search: {str(e)}"
         )
 
 

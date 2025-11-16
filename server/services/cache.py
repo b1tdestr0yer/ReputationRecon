@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from pathlib import Path
 import hashlib
 import config
@@ -171,4 +171,107 @@ class AssessmentCache:
         conn.close()
         
         return deleted
+    
+    def search(self, product_name: Optional[str] = None, vendor_name: Optional[str] = None,
+               hash: Optional[str] = None, min_trust_score: Optional[int] = None,
+               max_trust_score: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Search cached assessments by product name, vendor, hash, or trust score range
+        
+        Args:
+            product_name: Partial match on product name (case-insensitive)
+            vendor_name: Partial match on vendor name (case-insensitive)
+            hash: Partial match on hash (case-insensitive)
+            min_trust_score: Minimum trust score (0-100)
+            max_trust_score: Maximum trust score (0-100)
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of assessment summaries with metadata
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Build query dynamically
+        conditions = []
+        params = []
+        
+        if product_name:
+            conditions.append("LOWER(entity_name) LIKE ?")
+            params.append(f"%{product_name.lower()}%")
+        
+        if vendor_name:
+            conditions.append("LOWER(vendor_name) LIKE ?")
+            params.append(f"%{vendor_name.lower()}%")
+        
+        # Build base query
+        query = "SELECT cache_key, entity_name, vendor_name, assessment_data, created_at, updated_at FROM assessments"
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
+        
+        try:
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+        except sqlite3.OperationalError as e:
+            # Table might not exist - initialize it and try again
+            print(f"[Cache] Table may not exist, initializing: {e}")
+            conn.close()
+            self._init_db()
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+        
+        conn.close()
+        
+        # Parse results and filter by hash and trust score
+        assessments = []
+        for row in results:
+            cache_key, entity_name, vendor_name, assessment_data_json, created_at, updated_at = row
+            
+            try:
+                data = json.loads(assessment_data_json)
+            except json.JSONDecodeError:
+                continue
+            
+            # Filter by hash if provided
+            if hash:
+                # Check if hash exists in assessment data
+                assessment_hash = data.get('hash') or ''
+                if hash.lower() not in assessment_hash.lower():
+                    continue
+            
+            # Get trust score
+            trust_score = data.get('trust_score', {}).get('score', 50) if isinstance(data.get('trust_score'), dict) else 50
+            
+            # Filter by trust score range
+            if min_trust_score is not None and trust_score < min_trust_score:
+                continue
+            if max_trust_score is not None and trust_score > max_trust_score:
+                continue
+            
+            # Create summary
+            summary = {
+                'cache_key': cache_key,
+                'entity_name': entity_name,
+                'vendor_name': vendor_name,
+                'trust_score': trust_score,
+                'risk_level': data.get('trust_score', {}).get('risk_level', 'Unknown') if isinstance(data.get('trust_score'), dict) else 'Unknown',
+                'category': data.get('category', 'Unknown'),
+                'total_cves': data.get('security_posture', {}).get('cve_summary', {}).get('total_cves', 0) if isinstance(data.get('security_posture'), dict) else 0,
+                'critical_cves': data.get('security_posture', {}).get('cve_summary', {}).get('critical_count', 0) if isinstance(data.get('security_posture'), dict) else 0,
+                'cisa_kev_count': data.get('security_posture', {}).get('cve_summary', {}).get('cisa_kev_count', 0) if isinstance(data.get('security_posture'), dict) else 0,
+                'created_at': created_at,
+                'updated_at': updated_at,
+                'is_cached': True,
+                'hash': data.get('hash')
+            }
+            
+            assessments.append(summary)
+        
+        return assessments
 
