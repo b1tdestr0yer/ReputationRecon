@@ -63,5 +63,6 @@ export interface AssessmentResponse {
   cached_at?: string
   cache_expires_at?: string
   assessment_timestamp?: string
+  pro_mode?: boolean
 }
 

@@ -17,6 +17,7 @@ interface CacheBrowserState {
   productName?: string
   vendorName?: string
   hash?: string | null
+  proMode?: boolean
 }
 
 const HomePage = () => {

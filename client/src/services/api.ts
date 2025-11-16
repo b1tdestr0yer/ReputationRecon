@@ -26,6 +26,7 @@ export interface CacheSearchResponse {
     updated_at: string
     is_cached: boolean
     hash?: string
+    pro_mode?: boolean
   }>
   count: number
 }

@@ -13,6 +13,7 @@ interface InitialValues {
   productName?: string
   vendorName?: string
   hash?: string | null
+  proMode?: boolean
 }
 
 interface SingleAssessmentFormProps {
@@ -36,12 +37,15 @@ const SingleAssessmentForm = ({
   const handleAssess = async (
     productValue?: string | null,
     vendorValue?: string | null,
-    hashValue?: string | null
+    hashValue?: string | null,
+    proModeValue?: boolean
   ) => {
     // Use provided values or current state values
     const productToUse = productValue !== undefined ? productValue : product.trim() || null
     const vendorToUse = vendorValue !== undefined ? vendorValue : vendor.trim() || null
     const hashToUse = hashValue !== undefined ? hashValue : hash.trim() || null
+    // Use provided proMode or current state value
+    const proModeToUse = proModeValue !== undefined ? proModeValue : proMode
 
     // Normalize inputs exactly like the HTML version
     // Trim and convert empty strings to null for consistent cache key generation
@@ -71,18 +75,19 @@ const SingleAssessmentForm = ({
     onLoadingStart()
 
     try {
+      console.log('[SingleAssessmentForm] Calling assessApplication with pro_mode:', proModeToUse)
       const data = await assessApplication(
         productTrimmed,
         vendorTrimmed,
         hashTrimmed,
         false,
-        proMode
+        proModeToUse
       )
       onAssessmentComplete(data, {
         productName: productTrimmed,
         vendorName: vendorTrimmed,
         hash: hashTrimmed,
-        proMode: proMode,
+        proMode: proModeToUse,
       })
     } catch (error) {
       alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'))
@@ -104,21 +109,26 @@ const SingleAssessmentForm = ({
       const hashValue = (initialValues.hash && typeof initialValues.hash === 'string' && initialValues.hash.trim()) 
         ? initialValues.hash.trim() 
         : ''
+      // Set pro_mode from initial values
+      const proModeValue = initialValues.proMode || false
       
       console.log('[SingleAssessmentForm] Setting initial values:', {
         productName,
         vendorName,
         hash: initialValues.hash,
         hashValue,
+        proMode: proModeValue,
         initialValuesFull: initialValues
       })
       
       setProduct(productName)
       setVendor(vendorName)
       setHash(hashValue) // Set hash in form (empty string if null, otherwise the hash value)
+      setProMode(proModeValue) // Set pro_mode checkbox
       
       // Force a render to show the hash value
       console.log('[SingleAssessmentForm] Hash state set to:', hashValue)
+      console.log('[SingleAssessmentForm] PRO mode set to:', proModeValue)
       
       // Auto-trigger assessment after setting values
       // Use a small delay to ensure state is updated
@@ -128,12 +138,15 @@ const SingleAssessmentForm = ({
         console.log('[SingleAssessmentForm] Triggering assessment with:', {
           productName,
           vendorName,
-          hashForApi
+          hashForApi,
+          proMode: proModeValue
         })
+        // IMPORTANT: Pass proModeValue explicitly to ensure cache lookup uses correct mode
         handleAssess(
           productName || null, 
           vendorName || null, 
-          hashForApi
+          hashForApi,
+          proModeValue  // Pass pro_mode explicitly for proper cache lookup
         )
         onInitialValuesUsed?.()
       }, 100)

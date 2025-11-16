@@ -23,9 +23,9 @@ interface ThemeProviderProps {
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first, then default to 'light'
+    // Check localStorage first, then default to 'dark'
     const savedTheme = localStorage.getItem('theme') as Theme
-    return savedTheme || 'light'
+    return savedTheme || 'dark'
   })
 
   useEffect(() => {

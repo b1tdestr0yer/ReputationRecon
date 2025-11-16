@@ -4,7 +4,7 @@ import App from './App'
 import './styles/App.css'
 
 // Initialize theme before rendering
-const savedTheme = localStorage.getItem('theme') || 'light'
+const savedTheme = localStorage.getItem('theme') || 'dark'
 document.documentElement.setAttribute('data-theme', savedTheme)
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

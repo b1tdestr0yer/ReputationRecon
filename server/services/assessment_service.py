@@ -38,38 +38,50 @@ class AssessmentService:
         cached_data = None
         is_cached = False
         cache_valid = False
+        pro_mode = request.pro_mode or False
         
         if not force_refresh:
-            print("[Assessment Service] Checking cache...")
-            cache_result = self.cache.get(
-                product_name=request.product_name,
-                vendor_name=request.vendor_name,
-                url=request.url,
-                hash=request.hash
-            )
-            
-            if cache_result:
-                cached_data, cache_valid = cache_result
-                if cache_valid:
-                    print(f"[Assessment Service] ✓ Cache hit found (valid until {cached_data.get('cache_expires_at', 'unknown')})")
-                    is_cached = True
-                    # Reconstruct AssessmentResponse from cached data
-                    try:
-                        response = AssessmentResponse(**cached_data)
-                        return response
-                    except Exception as e:
-                        print(f"[Assessment Service] ⚠ Error reconstructing cached response: {e}, generating fresh assessment")
-                        cached_data = None
+            print(f"[Assessment Service] Checking cache with pro_mode={pro_mode}...")
+            try:
+                cache_result = self.cache.get(
+                    product_name=request.product_name,
+                    vendor_name=request.vendor_name,
+                    url=request.url,
+                    hash=request.hash,
+                    pro_mode=pro_mode
+                )
+                
+                if cache_result:
+                    cached_data, cache_valid = cache_result
+                    # Double-check that pro_mode matches (extra validation)
+                    cached_pro_mode = cached_data.get('pro_mode', None)
+                    if cached_pro_mode is not None and cached_pro_mode != pro_mode:
+                        print(f"[Assessment Service] ⚠ Cache entry AI mode mismatch: cached={cached_pro_mode}, requested={pro_mode}, generating fresh assessment")
+                        cache_result = None
+                    elif cache_valid:
+                        print(f"[Assessment Service] ✓ Cache hit found (pro_mode={pro_mode}, valid until {cached_data.get('cache_expires_at', 'unknown')})")
+                        is_cached = True
+                        # Reconstruct AssessmentResponse from cached data
+                        try:
+                            response = AssessmentResponse(**cached_data)
+                            return response
+                        except Exception as e:
+                            print(f"[Assessment Service] ⚠ Error reconstructing cached response: {e}, generating fresh assessment")
+                            cached_data = None
+                    else:
+                        print(f"[Assessment Service] ⚠ Cache entry found but expired (expired at {cached_data.get('cache_expires_at', 'unknown')}), generating fresh assessment")
                 else:
-                    print(f"[Assessment Service] ⚠ Cache entry found but expired (expired at {cached_data.get('cache_expires_at', 'unknown')}), generating fresh assessment")
-            else:
-                print("[Assessment Service] No cache entry found")
+                    print(f"[Assessment Service] No cache entry found for pro_mode={pro_mode}")
+            except ValueError as e:
+                # Validation error (e.g., all identifiers are None)
+                print(f"[Assessment Service] ⚠ Cache validation error: {e}, proceeding with fresh assessment")
+            except Exception as e:
+                print(f"[Assessment Service] ⚠ Cache lookup error: {e}, proceeding with fresh assessment")
         else:
             print("[Assessment Service] Force refresh requested, bypassing cache")
         
         # Step 1: Resolve entity and vendor (including URL via Gemini if not provided)
         print("\n[Assessment Service] Step 1: Resolving entity and vendor...")
-        pro_mode = request.pro_mode or False
         resolved = await self.entity_resolver.resolve(
             product_name=request.product_name,
             vendor_name=request.vendor_name,
@@ -211,14 +223,18 @@ class AssessmentService:
             # ALWAYS store the hash in the cached data so it can be retrieved later (even if None)
             # This is important for cache search to work correctly
             cache_data['hash'] = request.hash if request.hash else None
+            # Store pro_mode in cached data so it can be retrieved later
+            cache_data['pro_mode'] = pro_mode
             print(f"[Assessment Service] Storing hash in cache_data: '{cache_data.get('hash')}' (type: {type(cache_data.get('hash'))})")
+            print(f"[Assessment Service] Storing pro_mode in cache_data: '{cache_data.get('pro_mode')}'")
             print(f"[Assessment Service] request.hash value: '{request.hash}' (type: {type(request.hash)})")
             self.cache.set(
                 product_name=request.product_name,
                 vendor_name=request.vendor_name,
                 url=request.url,
                 hash=request.hash,
-                assessment_data=cache_data
+                assessment_data=cache_data,
+                pro_mode=pro_mode
             )
             print(f"[Assessment Service] ✓ Assessment cached")
         
@@ -227,7 +243,8 @@ class AssessmentService:
             request.product_name,
             request.vendor_name,
             request.url,
-            request.hash
+            request.hash,
+            pro_mode
         )
         response.is_cached = is_cached
         if is_cached and cached_data:

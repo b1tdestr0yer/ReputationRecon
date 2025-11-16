@@ -17,6 +17,7 @@ interface CacheResult {
   updated_at: string
   is_cached: boolean
   hash?: string
+  pro_mode?: boolean
 }
 
 interface CacheBrowserProps {
@@ -281,6 +282,7 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
                       productName: result.entity_name,
                       vendorName: result.vendor_name,
                       hash: hashValue,
+                      proMode: result.pro_mode || false,
                     },
                   })
                 }}
@@ -290,7 +292,46 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
                     <i className={getRiskIcon(result.trust_score, result.risk_level)}></i>
                   </div>
                   <div className="result-title">
-                    <h4>{result.entity_name}</h4>
+                    <h4>
+                      {result.entity_name}
+                      {result.pro_mode && (
+                        <span style={{
+                          marginLeft: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: 'white',
+                          borderRadius: '12px',
+                          fontSize: '0.65em',
+                          fontWeight: 'bold',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          verticalAlign: 'middle'
+                        }} title="PRO Mode">
+                          <i className="fas fa-star"></i> PRO
+                        </span>
+                      )}
+                      {!result.pro_mode && (
+                        <span style={{
+                          marginLeft: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          background: 'var(--section-bg)',
+                          color: 'var(--text-secondary)',
+                          borderRadius: '12px',
+                          fontSize: '0.65em',
+                          fontStyle: 'italic',
+                          border: '1px solid var(--border-color)',
+                          verticalAlign: 'middle'
+                        }} title="Classic Mode">
+                          <i className="fas fa-circle"></i> Classic
+                        </span>
+                      )}
+                    </h4>
                     <p>{result.vendor_name}</p>
                   </div>
                   <div className="result-score" style={{ color: getRiskColor(result.trust_score) }}>
@@ -328,6 +369,29 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
                     ) : (
                       <span style={{ fontSize: '0.85em', fontStyle: 'italic', color: 'var(--text-muted)' }}>
                         Hash: Not in cache
+                      </span>
+                    )}
+                  </div>
+                  <div className="stat-item">
+                    {result.pro_mode ? (
+                      <span className="pro-mode-badge" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 8px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        borderRadius: '12px',
+                        fontSize: '0.75em',
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        <i className="fas fa-star"></i> PRO Mode
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.85em', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                        Classic Mode
                       </span>
                     )}
                   </div>
