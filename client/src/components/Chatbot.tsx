@@ -79,6 +79,72 @@ const Chatbot = ({ assessmentData, isOpen, onClose }: ChatbotProps) => {
     }
   }
 
+  const formatMessage = (text: string): string => {
+    if (!text) return ''
+    
+    let formatted = text
+    
+    // Helper function to escape HTML
+    const escapeHtml = (str: string): string => {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    }
+    
+    // Use unique placeholders that won't appear in normal text
+    const placeholders: string[] = []
+    let placeholderIndex = 0
+    const getPlaceholder = () => `\uE000${placeholderIndex++}\uE001` // Use private use Unicode characters
+    
+    // Process markdown patterns and store as placeholders
+    formatted = formatted.replace(/\*\*([^*]+?)\*\*/g, (match, content) => {
+      const placeholder = getPlaceholder()
+      placeholders.push(`<strong>${escapeHtml(content)}</strong>`)
+      return placeholder
+    })
+    
+    formatted = formatted.replace(/__([^_]+?)__/g, (match, content) => {
+      const placeholder = getPlaceholder()
+      placeholders.push(`<strong>${escapeHtml(content)}</strong>`)
+      return placeholder
+    })
+    
+    formatted = formatted.replace(/`([^`]+?)`/g, (match, content) => {
+      const placeholder = getPlaceholder()
+      placeholders.push(`<code>${escapeHtml(content)}</code>`)
+      return placeholder
+    })
+    
+    formatted = formatted.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, (match, p1, p2, p3) => {
+      const placeholder = getPlaceholder()
+      placeholders.push(`${escapeHtml(p1)}<em>${escapeHtml(p2)}</em>${escapeHtml(p3)}`)
+      return placeholder
+    })
+    
+    formatted = formatted.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, (match, p1, p2, p3) => {
+      const placeholder = getPlaceholder()
+      placeholders.push(`${escapeHtml(p1)}<em>${escapeHtml(p2)}</em>${escapeHtml(p3)}`)
+      return placeholder
+    })
+    
+    // Escape remaining HTML to prevent XSS
+    formatted = escapeHtml(formatted)
+    
+    // Restore placeholders (which contain our safe HTML tags)
+    // The placeholder format is: \uE000{index}\uE001 (e.g., \uE0000\uE001, \uE0001\uE001)
+    for (let i = placeholders.length - 1; i >= 0; i--) {
+      const placeholderPattern = String.fromCharCode(0xE000) + String(i) + String.fromCharCode(0xE001)
+      // Use split/join for reliable replacement
+      formatted = formatted.split(placeholderPattern).join(placeholders[i])
+    }
+    
+    // Convert line breaks to <br>
+    formatted = formatted.replace(/\n/g, '<br>')
+    
+    return formatted
+  }
+
   if (!isOpen) return null
 
   return (
@@ -123,7 +189,10 @@ const Chatbot = ({ assessmentData, isOpen, onClose }: ChatbotProps) => {
                 )}
               </div>
               <div className="message-content">
-                <div className="message-text">{message.content}</div>
+                <div 
+                  className="message-text" 
+                  dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+                />
                 <div className="message-time">
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>

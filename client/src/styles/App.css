@@ -1100,6 +1100,34 @@ button:disabled {
     color: white;
 }
 
+/* Formatting styles for chatbot messages */
+.message-text strong {
+    font-weight: 700;
+    color: inherit;
+}
+
+.message-text em {
+    font-style: italic;
+    color: inherit;
+}
+
+.message-text code {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: inherit;
+}
+
+[data-theme="dark"] .message-text code {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.user-message .message-text code {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .message-time {
     font-size: 0.75em;
     color: var(--text-muted);
