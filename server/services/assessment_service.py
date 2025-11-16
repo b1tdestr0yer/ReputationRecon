@@ -53,17 +53,28 @@ class AssessmentService:
                 
                 if cache_result:
                     cached_data, cache_valid = cache_result
-                    # Double-check that pro_mode matches (extra validation)
+                    # Get pro_mode from cached data (this is the source of truth)
                     cached_pro_mode = cached_data.get('pro_mode', None)
+                    
+                    print(f"[Assessment Service] Cache lookup: requested pro_mode={pro_mode}, cached pro_mode={cached_pro_mode}")
+                    
+                    # Double-check that pro_mode matches (extra validation)
                     if cached_pro_mode is not None and cached_pro_mode != pro_mode:
                         print(f"[Assessment Service] ⚠ Cache entry AI mode mismatch: cached={cached_pro_mode}, requested={pro_mode}, generating fresh assessment")
                         cache_result = None
                     elif cache_valid:
-                        print(f"[Assessment Service] ✓ Cache hit found (pro_mode={pro_mode}, valid until {cached_data.get('cache_expires_at', 'unknown')})")
+                        # Ensure pro_mode is explicitly set in cached_data (use cached value as source of truth)
+                        cached_data['pro_mode'] = cached_pro_mode if cached_pro_mode is not None else False
+                        print(f"[Assessment Service] ✓ Cache hit found (cached pro_mode={cached_data['pro_mode']}, requested={pro_mode}, valid until {cached_data.get('cache_expires_at', 'unknown')})")
                         is_cached = True
                         # Reconstruct AssessmentResponse from cached data
                         try:
                             response = AssessmentResponse(**cached_data)
+                            # Ensure pro_mode is set on response (double check)
+                            if hasattr(response, 'pro_mode') and response.pro_mode != cached_data['pro_mode']:
+                                print(f"[Assessment Service] ⚠ Response pro_mode mismatch! Setting to cached value: {cached_data['pro_mode']}")
+                                response.pro_mode = cached_data['pro_mode']
+                            print(f"[Assessment Service] ✓ Returning cached response with pro_mode={response.pro_mode if hasattr(response, 'pro_mode') else 'N/A'}")
                             return response
                         except Exception as e:
                             print(f"[Assessment Service] ⚠ Error reconstructing cached response: {e}, generating fresh assessment")
@@ -209,8 +220,10 @@ class AssessmentService:
             trust_score=trust_score,
             alternatives=alternatives,
             suggestion=suggestion,
-            data_quality=data_quality
+            data_quality=data_quality,
+            pro_mode=pro_mode  # Include pro_mode in response
         )
+        print(f"[Assessment Service] Created response with pro_mode={pro_mode}")
         
         # Cache the result (if not from cache)
         if not is_cached:

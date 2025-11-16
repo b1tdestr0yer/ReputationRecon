@@ -96,4 +96,5 @@ class AssessmentResponse(BaseModel):
     is_cached: bool = Field(False, description="Whether this result was retrieved from cache")
     cached_at: Optional[str] = Field(None, description="When the assessment was originally cached")
     cache_expires_at: Optional[str] = Field(None, description="When the cache entry expires")
+    pro_mode: bool = Field(False, description="Whether this assessment was performed with PRO mode (gemini-2.5-pro)")
 
