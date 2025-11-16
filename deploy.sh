@@ -25,8 +25,8 @@ fi
 # Configuration
 DOMAIN=""
 EMAIL=""
-APP_USER="reputationrecon"
-APP_DIR="/home/$APP_USER/ReputationRecon"
+APP_USER=$(whoami)
+APP_DIR="$HOME/ReputationRecon"
 
 # Get domain name
 read -p "Enter your domain name (e.g., example.com): " DOMAIN
@@ -47,11 +47,11 @@ echo -e "${GREEN}Starting deployment for domain: $DOMAIN${NC}"
 echo ""
 
 # Step 1: Update system
-echo -e "${YELLOW}[1/10] Updating system packages...${NC}"
+echo -e "${YELLOW}[1/9] Updating system packages...${NC}"
 sudo apt update && sudo apt upgrade -y
 
 # Step 2: Install dependencies
-echo -e "${YELLOW}[2/10] Installing system dependencies...${NC}"
+echo -e "${YELLOW}[2/9] Installing system dependencies...${NC}"
 sudo apt install -y \
     python3.12 \
     python3.12-venv \
@@ -68,31 +68,23 @@ sudo apt install -y \
     supervisor
 
 # Step 3: Configure firewall
-echo -e "${YELLOW}[3/10] Configuring firewall...${NC}"
+echo -e "${YELLOW}[3/9] Configuring firewall...${NC}"
 sudo ufw allow OpenSSH
 sudo ufw allow 'Nginx Full'
 sudo ufw --force enable
 
-# Step 4: Create application user
-echo -e "${YELLOW}[4/10] Creating application user...${NC}"
-if ! id "$APP_USER" &>/dev/null; then
-    sudo adduser --disabled-password --gecos "" $APP_USER
-    sudo usermod -aG sudo $APP_USER
-else
-    echo "User $APP_USER already exists, skipping..."
-fi
-
-# Step 5: Clone repository (if not already cloned)
-echo -e "${YELLOW}[5/10] Setting up application...${NC}"
+# Step 4: Check if repository exists
+echo -e "${YELLOW}[4/9] Checking application directory...${NC}"
 if [ ! -d "$APP_DIR" ]; then
-    echo "Please clone the repository to $APP_DIR first!"
-    echo "Run: sudo -u $APP_USER git clone <repo-url> $APP_DIR"
+    echo -e "${RED}Repository not found at $APP_DIR${NC}"
+    echo "Please clone the repository first:"
+    echo "  cd $HOME"
+    echo "  git clone <repo-url> ReputationRecon"
     exit 1
 fi
 
-# Step 6: Setup Python backend
-echo -e "${YELLOW}[6/10] Setting up Python backend...${NC}"
-sudo -u $APP_USER bash << EOF
+# Step 5: Setup Python backend
+echo -e "${YELLOW}[5/9] Setting up Python backend...${NC}"
 cd $APP_DIR
 if [ ! -d "venv" ]; then
     python3.12 -m venv venv
@@ -100,18 +92,16 @@ fi
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-EOF
 
-# Step 7: Setup Node.js frontend
-echo -e "${YELLOW}[7/10] Building frontend...${NC}"
-sudo -u $APP_USER bash << EOF
+# Step 6: Setup Node.js frontend
+echo -e "${YELLOW}[6/9] Building frontend...${NC}"
 cd $APP_DIR/client
 npm install
 npm run build
-EOF
+cd $APP_DIR
 
-# Step 8: Create systemd service
-echo -e "${YELLOW}[8/10] Creating systemd service...${NC}"
+# Step 7: Create systemd service
+echo -e "${YELLOW}[7/9] Creating systemd service...${NC}"
 sudo tee /etc/systemd/system/reputationrecon.service > /dev/null << EOF
 [Unit]
 Description=ReputationRecon FastAPI Backend
@@ -132,15 +122,15 @@ RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=read-only
 ReadWritePaths=$APP_DIR
+ReadWritePaths=$HOME
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Step 9: Configure Nginx
-echo -e "${YELLOW}[9/10] Configuring Nginx...${NC}"
+# Step 8: Configure Nginx
+echo -e "${YELLOW}[8/9] Configuring Nginx...${NC}"
 sudo tee /etc/nginx/sites-available/reputationrecon > /dev/null << EOF
 # Redirect HTTP to HTTPS
 server {
@@ -246,8 +236,8 @@ sudo rm -f /etc/nginx/sites-enabled/default
 # Test Nginx config
 sudo nginx -t
 
-# Step 10: Obtain SSL certificate
-echo -e "${YELLOW}[10/10] Obtaining SSL certificate...${NC}"
+# Step 9: Obtain SSL certificate
+echo -e "${YELLOW}[9/9] Obtaining SSL certificate...${NC}"
 sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
 
 # Enable and start services
