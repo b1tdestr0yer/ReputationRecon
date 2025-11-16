@@ -24,6 +24,8 @@ Every assessment includes a clear 0-100 trust score with detailed rationale, con
 - **Security Posture**: Vendor reputation, data handling, compliance, and incident tracking
 - **Risk Assessment**: AI-powered analysis of security signals and threat patterns
 
+![CVE Analysis](images/CVE_analysis.png)
+
 ### 🤖 **Dual AI Modes**
 - **Classic Mode**: Fast, efficient assessments using standard AI models
 - **PRO Mode**: Enhanced analysis using Gemini 2.5 Pro for deeper insights and higher quality synthesis
@@ -147,6 +149,8 @@ The interface provides:
 - Complete source citations
 - Export options for reports
 
+![Assessment Results Example](images/RiskyApp.png)
+
 ### API Usage
 
 #### Basic Assessment
@@ -193,6 +197,9 @@ curl "http://localhost:8000/api/cache/search?product_name=Slack&limit=10"
    - Security advisories
    - Bug bounty platforms
 3. **AI Synthesis**: Analyzes collected data using Gemini AI to generate comprehensive security posture
+
+![AI Synthesis with Caution](images/AiWithCaution.png)
+
 4. **Trust Scoring**: Calculates transparent 0-100 trust score with detailed factor breakdown
 5. **Alternative Suggestions**: Identifies safer alternatives when risks are detected
 6. **Caching**: Stores results with full metadata for reproducibility
@@ -208,6 +215,10 @@ The trust score is calculated using a transparent algorithm:
 - **Confidence Score**: Reflects data quality and completeness
 
 All values are fine-tuned by AI training on real datasets. See the Help page in the web interface for complete methodology.
+
+![Key Factors in Trust Score](images/KeyFactors.png)
+
+![Risk Calculation Process](images/RiskCalculation.png)
 
 ## 📊 Data Sources
 
@@ -285,6 +296,8 @@ Browse and search previous assessments:
 - Filter by trust score range
 - See AI mode used for each assessment
 - Click any result to reload it instantly
+
+![Cache Browser Search Panel](images/SearchPanel.png)
 
 ### Export Functionality
 
