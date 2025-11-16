@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { SecurityPosture, TrustScore, AssessmentResponse } from '../types'
+import { SecurityPosture, AssessmentResponse } from '../types'
 
 interface SecurityRecommendationProps {
   suggestion: string
@@ -15,7 +15,7 @@ const SecurityRecommendation = ({
   trustScore,
   riskLevel,
   securityPosture,
-  assessmentData,
+  assessmentData: _assessmentData,
   onOpenChatbot,
 }: SecurityRecommendationProps) => {
   // Parse recommendation status from AI text

@@ -162,24 +162,6 @@ const SpiderChart = ({ data }: SpiderChartProps) => {
       )
     })
 
-    // Trusted vendors list (same as backend)
-    const trustedVendors = [
-      'bitdefender',
-      'bitdefenderfalx',
-      'clamav',
-      'crowdstrike',
-      'crowstrike',
-      'kaspersky',
-      'microsoft',
-      'fortinet',
-      'google',
-      'withsecure',
-      'palo alto networks',
-      'paloalto',
-      'sentinel one',
-      'sentinelone',
-    ]
-
     let positives = 0
     let total = 0
     let trustedDetections = 0
@@ -199,7 +181,7 @@ const SpiderChart = ({ data }: SpiderChartProps) => {
     }
 
     // Check for trusted vendor detections in factors
-    for (const [key, value] of Object.entries(factors)) {
+    for (const [key] of Object.entries(factors)) {
       if (key.startsWith('virustotal_trusted_vendors_')) {
         const match = key.match(/virustotal_trusted_vendors_(\d+)/)
         if (match) {

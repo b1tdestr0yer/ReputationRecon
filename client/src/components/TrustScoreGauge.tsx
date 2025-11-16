@@ -6,7 +6,6 @@ interface TrustScoreGaugeProps {
 
 const TrustScoreGauge = ({ trustScore }: TrustScoreGaugeProps) => {
   const score = trustScore.score || 0
-  const riskLevel = trustScore.risk_level || 'Unknown'
   const confidence = ((trustScore.confidence || 0) * 100).toFixed(0)
 
   // Determine colors based on score

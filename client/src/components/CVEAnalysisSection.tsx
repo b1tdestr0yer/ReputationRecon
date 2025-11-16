@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { CVESummary, CVE } from '../types'
+import { useState } from 'react'
+import { CVESummary } from '../types'
 
 interface CVEAnalysisSectionProps {
   cveSummary: CVESummary

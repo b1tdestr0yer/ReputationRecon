@@ -44,12 +44,11 @@ const CacheInfo = ({ data, onRefresh, isRefreshing }: CacheInfoProps) => {
     return 'just now'
   }
 
-  const assessmentDate = new Date(assessmentTimestamp)
   const formattedDate = formatDate(assessmentTimestamp)
   const relativeTime = getRelativeTime(assessmentTimestamp)
 
   let expiresInfo = ''
-  let expiresBadge = ''
+  let expiresBadge: JSX.Element | null = null
   if (cacheExpiresAt) {
     const expiresDate = new Date(cacheExpiresAt)
     const now = new Date()

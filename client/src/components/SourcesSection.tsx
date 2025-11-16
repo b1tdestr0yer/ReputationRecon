@@ -5,7 +5,7 @@ interface SourcesSectionProps {
   securityPosture: SecurityPosture
 }
 
-const SourcesSection = ({ citations, securityPosture }: SourcesSectionProps) => {
+const SourcesSection = ({ citations, securityPosture: _securityPosture }: SourcesSectionProps) => {
   const bugBountyCitations = citations.filter(
     (c) => c.source_type === 'HackerOne' || c.source_type === 'Bugcrowd'
   )

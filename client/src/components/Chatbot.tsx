@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { AssessmentResponse } from '../types'
 import { sendChatMessage } from '../services/api'
-import { useTheme } from '../contexts/ThemeContext'
 
 interface ChatbotProps {
   assessmentData: AssessmentResponse
@@ -21,9 +20,6 @@ const Chatbot = ({ assessmentData, isOpen, onClose }: ChatbotProps) => {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { theme } = useTheme()
-
-  const isDarkMode = theme === 'dark'
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -98,31 +94,31 @@ const Chatbot = ({ assessmentData, isOpen, onClose }: ChatbotProps) => {
     const getPlaceholder = () => `\uE000${placeholderIndex++}\uE001` // Use private use Unicode characters
     
     // Process markdown patterns and store as placeholders
-    formatted = formatted.replace(/\*\*([^*]+?)\*\*/g, (match, content) => {
+    formatted = formatted.replace(/\*\*([^*]+?)\*\*/g, (_match, content) => {
       const placeholder = getPlaceholder()
       placeholders.push(`<strong>${escapeHtml(content)}</strong>`)
       return placeholder
     })
     
-    formatted = formatted.replace(/__([^_]+?)__/g, (match, content) => {
+    formatted = formatted.replace(/__([^_]+?)__/g, (_match, content) => {
       const placeholder = getPlaceholder()
       placeholders.push(`<strong>${escapeHtml(content)}</strong>`)
       return placeholder
     })
     
-    formatted = formatted.replace(/`([^`]+?)`/g, (match, content) => {
+    formatted = formatted.replace(/`([^`]+?)`/g, (_match, content) => {
       const placeholder = getPlaceholder()
       placeholders.push(`<code>${escapeHtml(content)}</code>`)
       return placeholder
     })
     
-    formatted = formatted.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, (match, p1, p2, p3) => {
+    formatted = formatted.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, (_match, p1, p2, p3) => {
       const placeholder = getPlaceholder()
       placeholders.push(`${escapeHtml(p1)}<em>${escapeHtml(p2)}</em>${escapeHtml(p3)}`)
       return placeholder
     })
     
-    formatted = formatted.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, (match, p1, p2, p3) => {
+    formatted = formatted.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, (_match, p1, p2, p3) => {
       const placeholder = getPlaceholder()
       placeholders.push(`${escapeHtml(p1)}<em>${escapeHtml(p2)}</em>${escapeHtml(p3)}`)
       return placeholder

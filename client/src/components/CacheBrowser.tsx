@@ -35,7 +35,7 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
   const [error, setError] = useState<string | null>(null)
 
   // Debounce search using ref
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const performSearch = async (product: string, vendor: string, hashValue: string, filter: string) => {
     setLoading(true)
@@ -105,14 +105,14 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
     }
   }, [productName, vendorName, hash, trustScoreFilter])
 
-  const getRiskBadgeClass = (score: number, riskLevel: string) => {
+  const getRiskBadgeClass = (score: number, _riskLevel: string) => {
     if (score >= 70) return 'risk-low'
     if (score >= 50) return 'risk-medium'
     if (score >= 30) return 'risk-high'
     return 'risk-critical'
   }
 
-  const getRiskIcon = (score: number, riskLevel: string) => {
+  const getRiskIcon = (score: number, _riskLevel: string) => {
     if (score >= 70) return 'fas fa-check-circle'
     if (score >= 50) return 'fas fa-exclamation-circle'
     if (score >= 30) return 'fas fa-exclamation-triangle'
