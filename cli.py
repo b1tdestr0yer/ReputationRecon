@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ReputationRecon CLI - Command-line interface for security assessments
+Secure Your App Health CLI - Command-line interface for security assessments
 """
 import asyncio
 import json
@@ -114,7 +114,7 @@ def print_comparison(comparison_dict: dict):
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="ReputationRecon - AI-powered security assessment tool",
+        description="Secure Your App Health - AI-powered security assessment tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

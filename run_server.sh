@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# ReputationRecon API Server Startup Script
+# Secure Your App Health API Server Startup Script
 
-echo "🚀 Starting ReputationRecon API Server..."
+echo "🚀 Starting Secure Your App Health API Server..."
 
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then

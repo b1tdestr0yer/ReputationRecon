@@ -1,4 +1,4 @@
-# ReputationRecon - AI-Powered Security Assessment Tool
+# Secure Your App Health - AI-Powered Security Assessment Tool
 
 A comprehensive security assessment platform that generates CISO-ready trust briefs for applications in minutes. Built for security teams and CISOs who need accurate, concise, and source-grounded snapshots of a product's security posture.
 
@@ -33,7 +33,7 @@ A comprehensive security assessment platform that generates CISO-ready trust bri
 
 1. **Clone or navigate to the project directory:**
    ```bash
-   cd ReputationRecon
+   cd Secure Your App Health
    ```
 
 2. **Create a virtual environment (recommended):**
@@ -293,7 +293,7 @@ The system collects data from multiple high-signal sources:
 ## Project Structure
 
 ```
-ReputationRecon/
+Secure Your App Health/
 ├── main.py                      # FastAPI application entry point
 ├── cli.py                       # Command-line interface
 ├── config.py                    # Configuration management

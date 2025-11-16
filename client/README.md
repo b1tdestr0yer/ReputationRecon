@@ -1,6 +1,6 @@
-# ReputationRecon Client
+# Secure Your App Health Client
 
-This is the TypeScript/React frontend for the ReputationRecon Security Assessment Tool. A modern, professional security assessment interface with dark mode, cache browsing, and real-time search capabilities.
+This is the TypeScript/React frontend for the Secure Your App Health Security Assessment Tool. A modern, professional security assessment interface with dark mode, cache browsing, and real-time search capabilities.
 
 ## Setup
 

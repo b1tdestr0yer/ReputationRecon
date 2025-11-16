@@ -1,6 +1,6 @@
 # Setting Up API Keys
 
-ReputationRecon supports multiple methods for setting API keys. Choose the method that works best for you.
+Secure Your App Health supports multiple methods for setting API keys. Choose the method that works best for you.
 
 ## Method 1: Using Setup Scripts (Recommended)
 

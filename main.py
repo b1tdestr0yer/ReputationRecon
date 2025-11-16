@@ -12,7 +12,7 @@ import os
 # Load environment variables from .env file
 load_dotenv()
 
-app = FastAPI(title="ReputationRecon API", description="AI-powered security assessment tool for CISOs")
+app = FastAPI(title="Secure Your App Health API", description="AI-powered security assessment tool for CISOs")
 
 # Serve static files (web UI)
 if os.path.exists("static"):
@@ -37,12 +37,12 @@ app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():
-    return {"message": "ReputationRecon API is running", "docs": "/docs", "web_ui": "/static/index.html" if os.path.exists("static/index.html") else None}
+    return {"message": "Secure Your App Health API is running", "docs": "/docs", "web_ui": "/static/index.html" if os.path.exists("static/index.html") else None}
 
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*60)
-    print("🚀 ReputationRecon API Server Starting...")
+    print("🚀 Secure Your App Health API Server Starting...")
     print("="*60)
     print(f"📡 Server will be available at: http://localhost:8000")
     print(f"📚 API Documentation: http://localhost:8000/docs")
