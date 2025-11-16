@@ -1,7 +1,7 @@
-# ReputationRecon Startup Script for Windows
+# Secure Your App Health Startup Script for Windows
 # This script sets up and runs the application
 
-Write-Host "ReputationRecon - Starting Application" -ForegroundColor Cyan
+Write-Host "Secure Your App Health - Starting Application" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -56,7 +56,7 @@ if (-not $pythonCmd) {
     Write-Host ""
     Write-Host "ERROR: Python not found!" -ForegroundColor Red
     Write-Host ""
-    Write-Host "Python 3.8+ is required to run ReputationRecon." -ForegroundColor Yellow
+    Write-Host "Python 3.8+ is required to run Secure Your App Health." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Please install Python from one of these sources:" -ForegroundColor Yellow
     Write-Host "  1. Official: https://www.python.org/downloads/" -ForegroundColor Cyan
@@ -130,7 +130,7 @@ if (-not (Test-Path ".env")) {
 
 # Start the server
 Write-Host ""
-Write-Host "Starting ReputationRecon server..." -ForegroundColor Cyan
+Write-Host "Starting Secure Your App Health server..." -ForegroundColor Cyan
 Write-Host "Server will be available at: http://localhost:8000" -ForegroundColor Green
 Write-Host "API Documentation: http://localhost:8000/docs" -ForegroundColor Green
 Write-Host "Web UI: http://localhost:8000/static/index.html" -ForegroundColor Green

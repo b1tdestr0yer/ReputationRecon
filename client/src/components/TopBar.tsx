@@ -14,7 +14,7 @@ const TopBar = () => {
       <div className="top-bar-content">
         <div className="top-bar-title" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
           <i className="fas fa-shield-alt"></i>
-          <span>ReputationRecon</span>
+          <span>Secure Your App Health</span>
         </div>
         <div className="top-bar-actions">
           {!isHelpPage && (

@@ -38,7 +38,7 @@ const HelpPage = () => {
             <i className="fas fa-info-circle"></i> How Trust/Risk Levels Are Calculated
           </h2>
           <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '30px' }}>
-            ReputationRecon calculates trust scores (0-100) based on comprehensive security data analysis. 
+            Secure Your App Health calculates trust scores (0-100) based on comprehensive security data analysis. 
             The score starts at <strong>60 (neutral)</strong> and adjusts based on positive and negative security factors.
           </p>
 

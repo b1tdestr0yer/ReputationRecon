@@ -1,5 +1,5 @@
 """
-Configuration helper for ReputationRecon
+Configuration helper for Secure Your App Health
 Provides easy access to API keys and configuration settings
 """
 import os

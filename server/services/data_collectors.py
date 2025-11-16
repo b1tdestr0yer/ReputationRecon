@@ -19,7 +19,7 @@ class DataCollector:
     def __init__(self):
         self.timeout = 30.0
         self.headers = {
-            "User-Agent": "ReputationRecon/1.0 (Security Assessment Tool)"
+            "User-Agent": "Secure Your App Health/1.0 (Security Assessment Tool)"
         }
     
     async def fetch(self, url: str, params: Optional[Dict] = None) -> Optional[Dict]:

@@ -1,4 +1,4 @@
-# Secure Your App Health 🔒
+# Secure Your App Health - AI-Powered Security Assessment Tool
 
 **AI-Powered Security Assessment Platform for Modern CISOs**
 
@@ -227,21 +227,42 @@ All assessments are data-driven—no hardcoded vendor lists or predetermined sco
 
 ```
 ReputationRecon/
-├── server/                 # Backend FastAPI application
-│   ├── api/               # REST API endpoints
-│   ├── services/          # Core business logic
-│   │   ├── assessment_service.py    # Main orchestration
-│   │   ├── ai_synthesizer.py        # AI-powered synthesis
-│   │   ├── data_collectors.py       # Multi-source data collection
-│   │   ├── cache.py                 # SQLite caching system
-│   │   └── export_service.py        # Report generation
-│   └── dtos/              # Data transfer objects
-├── client/                # React + TypeScript frontend
+├── main.py                      # FastAPI application entry point
+├── cli.py                       # Command-line interface
+├── config.py                    # Configuration management
+├── requirements.txt             # Python dependencies
+├── run_server.sh               # Server startup script (Linux/Mac)
+├── setup_env.sh                # Environment setup script
+├── setup_env.ps1               # Environment setup script (Windows)
+├── SETUP_API_KEYS.md           # API key setup instructions
+├── static/
+│   ├── index.html              # Web UI
+│   └── styles.css              # CSS styles (separated from HTML)
+├── server/
+│   ├── __init__.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── routing.py          # API routes and endpoints
+│   ├── dtos/
+│   │   ├── __init__.py
+│   │   ├── AppDetails.py       # Legacy DTO
+│   │   ├── AssessmentRequest.py
+│   │   └── AssessmentResponse.py
+│   └── services/
+│       ├── __init__.py
+│       ├── cache.py            # SQLite cache implementation
+│       ├── data_collectors.py   # Data collection from various sources
+│       ├── classifier.py        # Software taxonomy classification
+│       ├── ai_synthesizer.py    # AI-powered synthesis engine
+│       ├── assessment_service.py # Main assessment orchestration
+│       └── export_service.py    # Report export functionality
+├── client/                      # React + TypeScript frontend
 │   └── src/
-│       ├── components/    # UI components
-│       ├── pages/         # Page components
-│       └── services/      # API client
-└── assessments_cache.db   # Local SQLite cache
+│       ├── components/          # UI components
+│       ├── pages/               # Page components
+│       └── services/            # API client
+├── assessments_cache.db         # Local SQLite cache
+└── README.md
 ```
 
 ## 🎨 Features Deep Dive
