@@ -129,46 +129,14 @@ ReadWritePaths=$HOME
 WantedBy=multi-user.target
 EOF
 
-# Step 8: Configure Nginx
+# Step 8: Configure Nginx (HTTP only first, certbot will add SSL)
 echo -e "${YELLOW}[8/9] Configuring Nginx...${NC}"
 sudo tee /etc/nginx/sites-available/reputationrecon > /dev/null << EOF
-# Redirect HTTP to HTTPS
+# HTTP server (certbot will add HTTPS and redirect)
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN www.$DOMAIN;
-    
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    
-    location / {
-        return 301 https://\$server_name\$request_uri;
-    }
-}
-
-# HTTPS server
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $DOMAIN www.$DOMAIN;
-
-    # SSL Configuration (will be updated by certbot)
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    
-    # SSL Security Settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-
-    # Security Headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
 
     # Logging
     access_log /var/log/nginx/reputationrecon_access.log;
@@ -233,10 +201,11 @@ EOF
 sudo ln -sf /etc/nginx/sites-available/reputationrecon /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
-# Test Nginx config
+# Test and start Nginx
 sudo nginx -t
+sudo systemctl restart nginx
 
-# Step 9: Obtain SSL certificate
+# Step 9: Obtain SSL certificate (certbot will automatically update nginx config)
 echo -e "${YELLOW}[9/9] Obtaining SSL certificate...${NC}"
 sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
 
