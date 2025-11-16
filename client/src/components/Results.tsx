@@ -15,6 +15,7 @@ interface AssessmentParams {
   productName: string | null
   vendorName: string | null
   hash: string | null
+  proMode: boolean
 }
 
 interface ResultsProps {
@@ -34,12 +35,13 @@ const Results = ({ data, assessmentParams, onRefresh }: ResultsProps) => {
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      // Use the original assessment parameters (including hash) for refresh
+      // Use the original assessment parameters (including hash and proMode) for refresh
       const refreshedData = await assessApplication(
         assessmentParams.productName,
         assessmentParams.vendorName,
         assessmentParams.hash,
-        true // force refresh
+        true, // force refresh
+        assessmentParams.proMode // preserve PRO mode
       )
       setCurrentData(refreshedData)
       if (onRefresh) {

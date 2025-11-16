@@ -69,10 +69,12 @@ class AssessmentService:
         
         # Step 1: Resolve entity and vendor (including URL via Gemini if not provided)
         print("\n[Assessment Service] Step 1: Resolving entity and vendor...")
+        pro_mode = request.pro_mode or False
         resolved = await self.entity_resolver.resolve(
             product_name=request.product_name,
             vendor_name=request.vendor_name,
-            url=request.url
+            url=request.url,
+            pro_mode=pro_mode
         )
         
         entity_name = resolved["entity_name"]
@@ -89,7 +91,8 @@ class AssessmentService:
         category = self.classifier.classify(
             product_name=entity_name,
             vendor_name=vendor_name,
-            url=resolved_url
+            url=resolved_url,
+            pro_mode=pro_mode
         )
         print(f"[Assessment Service] ✓ Classified as: {category.value}")
         
@@ -135,7 +138,8 @@ class AssessmentService:
             entity_name=entity_name,
             vendor_name=vendor_name,
             category=category,
-            collected_data=collected_data
+            collected_data=collected_data,
+            pro_mode=pro_mode
         )
         print(f"[Assessment Service] ✓ Security posture synthesized ({len(security_posture.citations)} citations)")
         
@@ -155,7 +159,8 @@ class AssessmentService:
             vendor_name=vendor_name,
             trust_score=trust_score,
             security_posture=security_posture,
-            collected_data=collected_data
+            collected_data=collected_data,
+            pro_mode=pro_mode
         )
         print(f"[Assessment Service] ✓ Found {len(alternatives)} alternatives")
         
@@ -167,7 +172,8 @@ class AssessmentService:
             category=category,
             security_posture=security_posture,
             trust_score=trust_score,
-            collected_data=collected_data
+            collected_data=collected_data,
+            pro_mode=pro_mode
         )
         print(f"[Assessment Service] ✓ Generated suggestion ({len(suggestion)} characters)")
         
@@ -239,7 +245,8 @@ class AssessmentService:
         entity_name: str,
         vendor_name: str,
         url: Optional[str],
-        hash: Optional[str]
+        hash: Optional[str],
+        pro_mode: bool = False
     ) -> Dict[str, Any]:
         """Collect data from all sources in parallel"""
         print(f"[Assessment Service] Starting parallel data collection...")
@@ -339,7 +346,8 @@ class AssessmentService:
                 vendor_page.get("content", ""),
                 entity_name,
                 vendor_name,
-                vendor_page.get("url", "")
+                vendor_page.get("url", ""),
+                pro_mode=pro_mode
             )
             if latest_version:
                 print(f"[Assessment Service] ✓ Extracted latest version from vendor page: {latest_version}")

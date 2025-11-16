@@ -16,27 +16,27 @@ class SoftwareClassifier:
 
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key
         if api_key:
             genai.configure(api_key=api_key)
-            # Use gemini-2.5-flash (faster) or gemini-2.5-pro (more capable)
+            self.use_ai = True
+            self.default_model_name = "gemini-2.5-flash-lite"
+            self.pro_model_name = "gemini-2.5-pro"
+            # Initialize default model
             try:
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
-                self.use_ai = True
-                print("[Classifier] ✓ Google Gemini configured for AI-powered classification (using gemini-2.5-flash)")
+                self.default_model = genai.GenerativeModel(self.default_model_name)
+                self.pro_model = genai.GenerativeModel(self.pro_model_name)
+                print(f"[Classifier] ✓ Google Gemini configured (default: {self.default_model_name}, PRO: {self.pro_model_name})")
             except Exception as e:
-                print(f"[Classifier] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
-                try:
-                    self.model = genai.GenerativeModel('gemini-2.5-pro')
-                    self.use_ai = True
-                    print("[Classifier] ✓ Google Gemini configured (using gemini-2.5-pro)")
-                except Exception as e2:
-                    print(f"[Classifier] ✗ Error initializing Gemini models: {e2}, using fallback")
-                    self.model = None
-                    self.use_ai = False
+                print(f"[Classifier] ✗ Error initializing Gemini models: {e}, using fallback")
+                self.default_model = None
+                self.pro_model = None
+                self.use_ai = False
         else:
-            self.model = None
+            self.default_model = None
+            self.pro_model = None
             self.use_ai = False
-
+        
         # Normalizat, extins, mult mai robust
         self.category_aliases = {
             # File Sharing & Storage
@@ -177,13 +177,20 @@ class SoftwareClassifier:
             "oracle": SoftwareCategory.DATABASE,
             "sqlite": SoftwareCategory.DATABASE,
         }
+    
+    def _get_model(self, pro_mode: bool = False):
+        """Get the appropriate model based on mode."""
+        if not self.use_ai:
+            return None
+        return self.pro_model if pro_mode else self.default_model
 
     def classify(
         self,
         product_name: str,
         vendor_name: str,
         description: Optional[str] = None,
-        url: Optional[str] = None
+        url: Optional[str] = None,
+        pro_mode: bool = False
     ) -> SoftwareCategory:
 
         text = " ".join([
@@ -193,7 +200,8 @@ class SoftwareClassifier:
         ]).lower()
 
         # If AI available
-        if self.use_ai and self.model:
+        model = self._get_model(pro_mode=pro_mode)
+        if self.use_ai and model:
             try:
                 prompt = f"""
 Classify the following software into ONE of these categories:
@@ -225,7 +233,7 @@ Vendor: {vendor_name}
 Description: {description or "none"}
 URL: {url or "none"}
 """
-                resp = self.model.generate_content(prompt)
+                resp = model.generate_content(prompt)
                 out = remove_double_stars(resp.text.strip().lower())
                 for alias, cat in self.category_aliases.items():
                     if alias in out:

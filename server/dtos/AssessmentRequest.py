@@ -8,6 +8,7 @@ class AssessmentRequest(BaseModel):
     vendor_name: Optional[str] = Field(None, max_length=128, description="Name of the vendor/company")
     url: Optional[str] = Field(None, max_length=128, description="URL of the product/vendor website")
     hash: Optional[str] = Field(None, max_length=128, description="Optional binary hash (MD5, SHA1, SHA256)")
+    pro_mode: Optional[bool] = Field(False, description="Enable PRO mode - uses gemini-2.5-pro for all AI operations")
     
     @field_validator('product_name', 'vendor_name', 'url', 'hash')
     @classmethod
