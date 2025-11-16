@@ -208,6 +208,11 @@ class AssessmentService:
             cache_data.pop('is_cached', None)
             cache_data.pop('cached_at', None)
             cache_data.pop('cache_expires_at', None)
+            # ALWAYS store the hash in the cached data so it can be retrieved later (even if None)
+            # This is important for cache search to work correctly
+            cache_data['hash'] = request.hash if request.hash else None
+            print(f"[Assessment Service] Storing hash in cache_data: '{cache_data.get('hash')}' (type: {type(cache_data.get('hash'))})")
+            print(f"[Assessment Service] request.hash value: '{request.hash}' (type: {type(request.hash)})")
             self.cache.set(
                 product_name=request.product_name,
                 vendor_name=request.vendor_name,

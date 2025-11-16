@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import SingleAssessmentForm from '../components/SingleAssessmentForm'
 import CompareModeForm from '../components/CompareModeForm'
@@ -13,11 +14,19 @@ interface AssessmentParams {
   proMode: boolean
 }
 
+interface CacheBrowserState {
+  productName?: string
+  vendorName?: string
+  hash?: string | null
+}
+
 const HomePage = () => {
+  const location = useLocation()
   const [isCompareMode, setIsCompareMode] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [assessmentData, setAssessmentData] = useState<AssessmentResponse | null>(null)
   const [assessmentParams, setAssessmentParams] = useState<AssessmentParams | null>(null)
+  const [initialValues, setInitialValues] = useState<CacheBrowserState | null>(null)
 
   const toggleMode = () => {
     setIsCompareMode(!isCompareMode)
@@ -40,6 +49,17 @@ const HomePage = () => {
     setAssessmentParams(null)
   }
 
+  // Handle navigation from cache browser
+  useEffect(() => {
+    const state = location.state as CacheBrowserState | null
+    if (state && (state.productName || state.vendorName)) {
+      console.log('[HomePage] Received navigation state:', state)
+      setInitialValues(state)
+      // Clear location state after reading to prevent re-triggering
+      window.history.replaceState({}, document.title)
+    }
+  }, [location])
+
   return (
     <div className="container">
       <Header />
@@ -54,6 +74,8 @@ const HomePage = () => {
         <SingleAssessmentForm
           onLoadingStart={handleLoadingStart}
           onAssessmentComplete={handleAssessmentComplete}
+          initialValues={initialValues}
+          onInitialValuesUsed={() => setInitialValues(null)}
         />
       ) : (
         <CompareModeForm

@@ -127,6 +127,17 @@ class AssessmentCache:
         # Convert datetime objects to strings for JSON serialization
         serializable_data = self._make_serializable(assessment_data)
         
+        # Debug: Log the hash being stored
+        stored_hash = assessment_data.get('hash')
+        print(f"[Cache] Storing assessment with hash in cache_data: '{stored_hash}' (type: {type(stored_hash)})")
+        
+        # Serialize to JSON
+        json_data = json.dumps(serializable_data)
+        
+        # Debug: Verify hash in serialized JSON
+        parsed_back = json.loads(json_data)
+        print(f"[Cache] Hash in serialized JSON: '{parsed_back.get('hash')}' (type: {type(parsed_back.get('hash'))})")
+        
         cursor.execute("""
             INSERT OR REPLACE INTO assessments 
             (cache_key, entity_name, vendor_name, assessment_data, updated_at)
@@ -135,7 +146,7 @@ class AssessmentCache:
             cache_key,
             assessment_data.get('entity_name', ''),
             assessment_data.get('vendor_name', ''),
-            json.dumps(serializable_data),
+            json_data,
             datetime.now().isoformat()
         ))
         
@@ -238,6 +249,10 @@ class AssessmentCache:
             except json.JSONDecodeError:
                 continue
             
+            # Debug: Log hash from retrieved data
+            raw_hash = data.get('hash')
+            print(f"[Cache Search] Retrieved hash for {entity_name}: '{raw_hash}' (type: {type(raw_hash)})")
+            
             # Filter by hash if provided
             if hash:
                 # Check if hash exists in assessment data
@@ -255,6 +270,25 @@ class AssessmentCache:
                 continue
             
             # Create summary
+            # Get hash from cached data - handle None, empty string, etc.
+            cached_hash = data.get('hash')
+            print(f"[Cache Search] Processing hash for {entity_name}: raw='{cached_hash}', type={type(cached_hash)}")
+            
+            # Normalize: if hash is empty string, convert to None
+            if cached_hash and isinstance(cached_hash, str) and cached_hash.strip():
+                cached_hash = cached_hash.strip()
+                print(f"[Cache Search] Hash normalized (string): '{cached_hash}'")
+            elif cached_hash is None:
+                cached_hash = None
+                print(f"[Cache Search] Hash is None")
+            elif cached_hash == '':
+                cached_hash = None
+                print(f"[Cache Search] Hash is empty string, converted to None")
+            else:
+                # Handle other types (shouldn't happen, but just in case)
+                cached_hash = str(cached_hash).strip() if cached_hash else None
+                print(f"[Cache Search] Hash converted from other type: '{cached_hash}'")
+            
             summary = {
                 'cache_key': cache_key,
                 'entity_name': entity_name,
@@ -268,9 +302,10 @@ class AssessmentCache:
                 'created_at': created_at,
                 'updated_at': updated_at,
                 'is_cached': True,
-                'hash': data.get('hash')
+                'hash': cached_hash  # This will be None if not present or empty
             }
             
+            print(f"[Cache Search] Final hash in summary for {entity_name}: '{summary['hash']}' (type: {type(summary['hash'])})")
             assessments.append(summary)
         
         return assessments

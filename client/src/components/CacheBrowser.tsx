@@ -67,6 +67,8 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
       console.log('[CacheBrowser] Searching with params:', searchParams)
       const response = await searchCache(searchParams)
       console.log('[CacheBrowser] Search response:', response)
+      console.log('[CacheBrowser] First result hash:', response.results?.[0]?.hash)
+      console.log('[CacheBrowser] All results with hashes:', response.results?.map(r => ({ name: r.entity_name, hash: r.hash })))
 
       setResults(response.results || [])
     } catch (err) {
@@ -254,7 +256,33 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
                 className="result-card"
                 onClick={() => {
                   onSelectAssessment?.(result.cache_key)
-                  navigate('/')
+                  // Extract hash - handle null, undefined, and empty string
+                  // Make sure we get the hash even if it's stored as null/undefined
+                  let hashValue = null
+                  if (result.hash) {
+                    if (typeof result.hash === 'string' && result.hash.trim()) {
+                      hashValue = result.hash.trim()
+                    } else if (result.hash !== null && result.hash !== undefined) {
+                      hashValue = String(result.hash).trim()
+                    }
+                  }
+                  
+                  console.log('[CacheBrowser] Clicking result:', {
+                    entity_name: result.entity_name,
+                    vendor_name: result.vendor_name,
+                    hash_original: result.hash,
+                    hash_type: typeof result.hash,
+                    hashValue: hashValue,
+                    full_result: result
+                  })
+                  
+                  navigate('/', {
+                    state: {
+                      productName: result.entity_name,
+                      vendorName: result.vendor_name,
+                      hash: hashValue,
+                    },
+                  })
                 }}
               >
                 <div className="result-header">
@@ -291,14 +319,19 @@ const CacheBrowser = ({ onSelectAssessment }: CacheBrowserProps) => {
                       <span>{result.cisa_kev_count} CISA KEV</span>
                     </div>
                   )}
-                </div>
-
-                {result.hash && (
-                  <div className="result-hash">
+                  <div className="stat-item">
                     <i className="fas fa-fingerprint"></i>
-                    <span>{result.hash.substring(0, 16)}...</span>
+                    {result.hash && result.hash.trim() ? (
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
+                        Hash: {result.hash.length > 32 ? `${result.hash.substring(0, 32)}...` : result.hash}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.85em', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                        Hash: Not in cache
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
 
                 <div className="result-footer">
                   <span>
