@@ -10,6 +10,7 @@ import SourcesSection from './SourcesSection'
 import AlternativesSection from './AlternativesSection'
 import ExportButtons from './ExportButtons'
 import CacheInfo from './CacheInfo'
+import Chatbot from './Chatbot'
 
 interface AssessmentParams {
   productName: string | null
@@ -27,6 +28,7 @@ interface ResultsProps {
 const Results = ({ data, assessmentParams, onRefresh }: ResultsProps) => {
   const [currentData, setCurrentData] = useState<AssessmentResponse>(data)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false)
 
   useEffect(() => {
     setCurrentData(data)
@@ -78,6 +80,14 @@ const Results = ({ data, assessmentParams, onRefresh }: ResultsProps) => {
         trustScore={currentData.trust_score.score}
         riskLevel={currentData.trust_score.risk_level}
         securityPosture={currentData.security_posture}
+        assessmentData={currentData}
+        onOpenChatbot={() => setIsChatbotOpen(true)}
+      />
+
+      <Chatbot
+        assessmentData={currentData}
+        isOpen={isChatbotOpen}
+        onClose={() => setIsChatbotOpen(false)}
       />
 
       <div className="section">

@@ -119,3 +119,35 @@ export const exportReport = async (
   return response.blob()
 }
 
+export interface ChatMessageRequest {
+  assessment_data: AssessmentResponse
+  message: string
+}
+
+export interface ChatMessageResponse {
+  message: string
+}
+
+export const sendChatMessage = async (
+  assessmentData: AssessmentResponse,
+  message: string
+): Promise<ChatMessageResponse> => {
+  const response = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      assessment_data: assessmentData,
+      message: message,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Server error: ${response.status} - ${errorText}`)
+  }
+
+  return response.json()
+}
+

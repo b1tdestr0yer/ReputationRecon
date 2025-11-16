@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { SecurityPosture, TrustScore } from '../types'
+import { SecurityPosture, TrustScore, AssessmentResponse } from '../types'
 
 interface SecurityRecommendationProps {
   suggestion: string
   trustScore: number
   riskLevel: string
   securityPosture: SecurityPosture
+  assessmentData?: AssessmentResponse
+  onOpenChatbot?: () => void
 }
 
 const SecurityRecommendation = ({
@@ -13,6 +15,8 @@ const SecurityRecommendation = ({
   trustScore,
   riskLevel,
   securityPosture,
+  assessmentData,
+  onOpenChatbot,
 }: SecurityRecommendationProps) => {
   // Parse recommendation status from AI text
   let cleanSuggestion = suggestion || 'No recommendation available.'
@@ -185,9 +189,42 @@ const SecurityRecommendation = ({
 
   return (
     <div className="section">
-      <h3>
-        <i className="fas fa-clipboard-check"></i> Security Recommendation
-      </h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+        <h3 style={{ margin: 0 }}>
+          <i className="fas fa-clipboard-check"></i> Security Recommendation
+        </h3>
+        {onOpenChatbot && (
+          <button
+            onClick={onOpenChatbot}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 20px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '0.95em',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+            title="Ask AI about this assessment"
+          >
+            <i className="fas fa-robot"></i>
+            <span>Ask AI</span>
+          </button>
+        )}
+      </div>
       <div
         className={`recommendation-card ${recStatus}`}
         style={{

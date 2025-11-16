@@ -417,3 +417,165 @@ async def export_assessment(format: str, assessment_data: dict, request: Request
             status_code=400,
             detail=f"Unsupported format: {format}. Supported formats: markdown, pdf"
         )
+
+
+@router.post(
+    "/chat",
+    summary="Chat with AI about assessment",
+    description="Ask questions about a security assessment using AI",
+    responses={
+        200: {"description": "AI response"},
+        400: {"description": "Invalid request"},
+        500: {"description": "Chat error"},
+    }
+)
+@limiter.limit("20/minute")
+async def chat_about_assessment(request: Request, payload: dict) -> JSONResponse:
+    """
+    Chat with AI about a security assessment.
+    
+    Requires assessment_data and message in the request body.
+    """
+    print(f"\n[API] POST /api/chat - Request received from {request.client.host if request.client else 'unknown'}")
+    
+    assessment_data = payload.get("assessment_data")
+    message = payload.get("message")
+    
+    if not assessment_data:
+        raise HTTPException(
+            status_code=400,
+            detail="assessment_data is required"
+        )
+    
+    if not message or not isinstance(message, str) or not message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="message is required and must be a non-empty string"
+        )
+    
+    try:
+        from server.services.ai_synthesizer import AISynthesizer
+        ai_synthesizer = AISynthesizer()
+        
+        # Build comprehensive context from assessment data
+        entity_name = assessment_data.get("entity_name", "Unknown")
+        vendor_name = assessment_data.get("vendor_name", "Unknown")
+        category = assessment_data.get("category", "Unknown")
+        
+        # Build context string with all assessment information
+        context_parts = []
+        context_parts.append(f"Security Assessment for: {entity_name}")
+        context_parts.append(f"Vendor: {vendor_name}")
+        context_parts.append(f"Category: {category}")
+        context_parts.append("")
+        
+        # Trust score information
+        trust_score = assessment_data.get("trust_score", {})
+        if trust_score:
+            context_parts.append("Trust Score Information:")
+            context_parts.append(f"- Score: {trust_score.get('score', 'N/A')}/100")
+            context_parts.append(f"- Risk Level: {trust_score.get('risk_level', 'N/A')}")
+            context_parts.append(f"- Confidence: {trust_score.get('confidence', 0) * 100:.1f}%")
+            if trust_score.get('rationale'):
+                context_parts.append(f"- Rationale: {trust_score.get('rationale')}")
+            context_parts.append("")
+        
+        # Security recommendation
+        suggestion = assessment_data.get("suggestion", "")
+        if suggestion:
+            context_parts.append("Security Recommendation:")
+            context_parts.append(suggestion)
+            context_parts.append("")
+        
+        # Security posture
+        security_posture = assessment_data.get("security_posture", {})
+        if security_posture:
+            context_parts.append("Security Posture:")
+            if security_posture.get("summary"):
+                context_parts.append(f"Summary: {security_posture.get('summary')}")
+            if security_posture.get("description"):
+                context_parts.append(f"Description: {security_posture.get('description')}")
+            if security_posture.get("usage"):
+                context_parts.append(f"Usage: {security_posture.get('usage')}")
+            if security_posture.get("vendor_reputation"):
+                context_parts.append(f"Vendor Reputation: {security_posture.get('vendor_reputation')}")
+            if security_posture.get("data_handling"):
+                context_parts.append(f"Data Handling: {security_posture.get('data_handling')}")
+            if security_posture.get("deployment_controls"):
+                context_parts.append(f"Deployment Controls: {security_posture.get('deployment_controls')}")
+            if security_posture.get("incidents_abuse"):
+                context_parts.append(f"Incidents/Abuse: {security_posture.get('incidents_abuse')}")
+            context_parts.append("")
+            
+            # CVE Summary
+            cve_summary = security_posture.get("cve_summary", {})
+            if cve_summary:
+                context_parts.append("CVE Information:")
+                context_parts.append(f"- Total CVEs: {cve_summary.get('total_cves', 0)}")
+                context_parts.append(f"- Critical CVEs: {cve_summary.get('critical_count', 0)}")
+                context_parts.append(f"- High CVEs: {cve_summary.get('high_count', 0)}")
+                context_parts.append(f"- CISA KEV entries: {cve_summary.get('cisa_kev_count', 0)}")
+                if cve_summary.get("detected_version"):
+                    context_parts.append(f"- Detected Version: {cve_summary.get('detected_version')}")
+                    context_parts.append(f"- Version-specific CVEs: {cve_summary.get('version_specific_cves', 0)}")
+                context_parts.append("")
+            
+            # Citations
+            citations = security_posture.get("citations", [])
+            if citations:
+                context_parts.append(f"Data Sources: {len(citations)} citations available")
+                context_parts.append("")
+        
+        # Alternatives
+        alternatives = assessment_data.get("alternatives", [])
+        if alternatives:
+            context_parts.append("Safer Alternatives:")
+            for alt in alternatives[:3]:
+                context_parts.append(f"- {alt.get('name', 'Unknown')} by {alt.get('vendor', 'Unknown')}: {alt.get('rationale', '')}")
+            context_parts.append("")
+        
+        context = "\n".join(context_parts)
+        
+        # Build the prompt for the AI
+        prompt = f"""You are a helpful security analyst AI assistant. You have access to a comprehensive security assessment for a software application. Answer the user's question based on the assessment data provided below.
+
+Assessment Context:
+{context}
+
+User Question: {message}
+
+Instructions:
+- Answer the question based on the assessment data provided
+- Be specific and reference actual numbers, scores, and findings from the assessment
+- If the question asks about something not in the assessment, say so clearly
+- Use a professional but friendly tone
+- Keep responses concise but informative
+- Focus on security-related aspects
+
+Answer:"""
+        
+        # Use gemini-2.5-flash-lite as specified
+        response_text = await ai_synthesizer._call_vertex_ai(prompt, model_name="gemini-2.5-flash-lite")
+        
+        if not response_text:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to get response from AI"
+            )
+        
+        print(f"[API] ✓ Chat response generated for {entity_name}")
+        return JSONResponse(
+            status_code=200,
+            content={"message": response_text.strip()}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API] ✗ ERROR during chat: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during chat: {str(e)}"
+        )
