@@ -6,6 +6,7 @@ interface AssessmentParams {
   productName: string | null
   vendorName: string | null
   hash: string | null
+  proMode: boolean
 }
 
 interface CompareModeFormProps {
@@ -23,6 +24,7 @@ const CompareModeForm = ({ onLoadingStart, onAssessmentComplete }: CompareModeFo
     { product: '', vendor: '' },
     { product: '', vendor: '' },
   ])
+  const [proMode, setProMode] = useState(false)
 
   const addCompareItem = () => {
     setItems([...items, { product: '', vendor: '' }])
@@ -57,6 +59,7 @@ const CompareModeForm = ({ onLoadingStart, onAssessmentComplete }: CompareModeFo
           requests.push({
             product_name: productTrimmed,
             vendor_name: vendorTrimmed,
+            pro_mode: proMode,
           })
         }
       }
@@ -79,6 +82,7 @@ const CompareModeForm = ({ onLoadingStart, onAssessmentComplete }: CompareModeFo
           productName: firstRequest.product_name,
           vendorName: firstRequest.vendor_name,
           hash: null, // Compare mode doesn't support hash
+          proMode: proMode,
         })
       }
     } catch (error) {
@@ -117,6 +121,23 @@ const CompareModeForm = ({ onLoadingStart, onAssessmentComplete }: CompareModeFo
             </div>
           </div>
         ))}
+      </div>
+      <div className="form-group">
+        <label htmlFor="compare-pro-mode" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            id="compare-pro-mode"
+            checked={proMode}
+            onChange={(e) => setProMode(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          <span>
+            <strong>PRO Mode</strong> - Use gemini-2.5-pro for all AI operations (higher quality, slower)
+          </span>
+        </label>
+        <small style={{ display: 'block', marginTop: '4px', color: '#666', marginLeft: '24px' }}>
+          Note: Security Recommendation always uses PRO model regardless of this setting
+        </small>
       </div>
       <button onClick={addCompareItem}>+ Add Another</button>
       <button onClick={handleCompare}>Compare Applications</button>

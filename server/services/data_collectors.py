@@ -260,35 +260,43 @@ class VendorPageCollector(DataCollector):
         """Initialize VendorPageCollector with optional Gemini AI support"""
         super().__init__()
         api_key = os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key
         if api_key:
             try:
                 genai.configure(api_key=api_key)
-                # Try gemini-2.5-flash first, fallback to gemini-2.5-pro
+                self.use_ai = True
+                self.default_model_name = "gemini-2.5-flash-lite"
+                self.pro_model_name = "gemini-2.5-pro"
+                # Initialize both models
                 try:
-                    self.model = genai.GenerativeModel('gemini-2.5-flash')
-                    self.use_ai = True
-                    print("[Vendor Collector] ✓ Google Gemini configured for version extraction (using gemini-2.5-flash)")
+                    self.default_model = genai.GenerativeModel(self.default_model_name)
+                    self.pro_model = genai.GenerativeModel(self.pro_model_name)
+                    print(f"[Vendor Collector] ✓ Google Gemini configured (default: {self.default_model_name}, PRO: {self.pro_model_name})")
                 except Exception as e:
-                    print(f"[Vendor Collector] ⚠ Error initializing gemini-2.5-flash: {e}, trying gemini-2.5-pro")
-                    try:
-                        self.model = genai.GenerativeModel('gemini-2.5-pro')
-                        self.use_ai = True
-                        print("[Vendor Collector] ✓ Google Gemini configured (using gemini-2.5-pro)")
-                    except Exception as e2:
-                        print(f"[Vendor Collector] ✗ Error initializing Gemini models: {e2}, using fallback")
-                        self.model = None
-                        self.use_ai = False
+                    print(f"[Vendor Collector] ✗ Error initializing Gemini models: {e}, using fallback")
+                    self.default_model = None
+                    self.pro_model = None
+                    self.use_ai = False
             except Exception as e:
                 print(f"[Vendor Collector] ✗ Error configuring Gemini: {e}, using fallback")
-                self.model = None
+                self.default_model = None
+                self.pro_model = None
                 self.use_ai = False
         else:
-            self.model = None
+            self.default_model = None
+            self.pro_model = None
             self.use_ai = False
     
-    async def extract_latest_version(self, vendor_page_content: str, product_name: str, vendor_name: str, vendor_url: str) -> Optional[str]:
+    def _get_model(self, pro_mode: bool = False):
+        """Get the appropriate model based on mode."""
+        if not self.use_ai:
+            return None
+        return self.pro_model if pro_mode else self.default_model
+    
+    async def extract_latest_version(self, vendor_page_content: str, product_name: str, vendor_name: str, vendor_url: str, pro_mode: bool = False) -> Optional[str]:
         """Extract the latest version of the software from vendor page content using Gemini"""
-        if not self.use_ai or not self.model:
+        model = self._get_model(pro_mode=pro_mode)
+        if not self.use_ai or not model:
             print("[Vendor Collector] Gemini not available, skipping AI-based version extraction")
             return None
         
@@ -332,7 +340,7 @@ If you cannot find a clear version number, return:
 
 Respond with ONLY valid JSON, no additional text or explanation."""
 
-            response = self.model.generate_content(prompt)
+            response = model.generate_content(prompt)
             response_text = remove_double_stars(response.text.strip())
             
             # Try to extract JSON from response
@@ -1202,17 +1210,22 @@ class EntityResolver:
     def __init__(self):
         """Initialize EntityResolver with Vertex AI REST API support"""
         self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self.model_name = "gemini-2.5-flash-lite"  # Using flash-lite as shown in user's example
+        self.default_model = "gemini-2.5-flash-lite"  # Default to flash-lite for speed
+        self.pro_model = "gemini-2.5-pro"  # PRO model
         self.base_url = "https://aiplatform.googleapis.com/v1/publishers/google/models"
         
         if self.api_key:
             self.use_ai = True
-            print(f"[Entity Resolver] ✓ Vertex AI configured for URL resolution (using {self.model_name})")
+            print(f"[Entity Resolver] ✓ Vertex AI configured for URL resolution (default: {self.default_model}, PRO: {self.pro_model})")
         else:
             self.use_ai = False
             print("[Entity Resolver] ✗ No API key found, using fallback resolution")
     
-    async def _call_vertex_ai(self, prompt: str) -> Optional[str]:
+    def _get_model_name(self, pro_mode: bool = False) -> str:
+        """Get the appropriate model name based on mode."""
+        return self.pro_model if pro_mode else self.default_model
+    
+    async def _call_vertex_ai(self, prompt: str, model_name: Optional[str] = None) -> Optional[str]:
         """Call Vertex AI REST API and return the generated text.
         
         Uses the Vertex AI REST API endpoint as documented at:
@@ -1224,7 +1237,8 @@ class EntityResolver:
         try:
             # Use generateContent (non-streaming) endpoint
             # Format: https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent
-            url = f"{self.base_url}/{self.model_name}:generateContent"
+            model = model_name or self.default_model
+            url = f"{self.base_url}/{model}:generateContent"
             params = {"key": self.api_key}
             
             # Request payload format per Vertex AI documentation
@@ -1273,7 +1287,7 @@ class EntityResolver:
             print(f"[Entity Resolver] ⚠ Error calling Vertex AI: {e}")
             return None
     
-    async def resolve_vendor_url_with_gemini(self, product_name: Optional[str], vendor_name: Optional[str]) -> Optional[str]:
+    async def resolve_vendor_url_with_gemini(self, product_name: Optional[str], vendor_name: Optional[str], pro_mode: bool = False) -> Optional[str]:
         """Use Vertex AI to resolve the vendor's official website URL"""
         if not self.use_ai:
             print("[Entity Resolver] Vertex AI not available, skipping AI-based URL resolution")
@@ -1298,7 +1312,8 @@ If you cannot determine the URL with high confidence, return:
 
 Respond with ONLY valid JSON, no additional text or explanation."""
 
-            response_text = await self._call_vertex_ai(prompt)
+            model_name = self._get_model_name(pro_mode=pro_mode)
+            response_text = await self._call_vertex_ai(prompt, model_name=model_name)
             if not response_text:
                 print("[Entity Resolver] ✗ Empty response from Vertex AI")
                 return None
@@ -1333,7 +1348,8 @@ Respond with ONLY valid JSON, no additional text or explanation."""
     
     async def resolve(self, product_name: Optional[str] = None,
                      vendor_name: Optional[str] = None,
-                     url: Optional[str] = None) -> Dict[str, str]:
+                     url: Optional[str] = None,
+                     pro_mode: bool = False) -> Dict[str, str]:
         """Resolve entity and vendor names, and optionally resolve vendor URL using Vertex AI"""
         print(f"[Entity Resolver] Resolving entity - product: {product_name}, vendor: {vendor_name}, url: {url}")
         resolved_entity = product_name or ""
@@ -1343,7 +1359,7 @@ Respond with ONLY valid JSON, no additional text or explanation."""
         # If no URL provided, try to resolve it using Vertex AI
         if not resolved_url and resolved_vendor and resolved_vendor.lower() not in ["unknown vendor", "unknown", ""]:
             print(f"[Entity Resolver] No URL provided, attempting to resolve using Vertex AI...")
-            ai_url = await self.resolve_vendor_url_with_gemini(resolved_entity, resolved_vendor)
+            ai_url = await self.resolve_vendor_url_with_gemini(resolved_entity, resolved_vendor, pro_mode=pro_mode)
             if ai_url:
                 resolved_url = ai_url
         

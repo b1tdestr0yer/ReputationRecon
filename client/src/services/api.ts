@@ -6,7 +6,8 @@ export const assessApplication = async (
   productName: string | null,
   vendorName: string | null,
   hash: string | null,
-  forceRefresh = false
+  forceRefresh = false,
+  proMode = false
 ): Promise<AssessmentResponse> => {
   const url = `${API_BASE}/assess${forceRefresh ? '?force_refresh=true' : ''}`
   
@@ -32,6 +33,7 @@ export const assessApplication = async (
       vendor_name: normalizedVendor,
       url: null,
       hash: normalizedHash,
+      pro_mode: proMode,
     }),
   })
 

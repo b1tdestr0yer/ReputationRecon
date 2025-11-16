@@ -6,6 +6,7 @@ interface AssessmentParams {
   productName: string | null
   vendorName: string | null
   hash: string | null
+  proMode: boolean
 }
 
 interface SingleAssessmentFormProps {
@@ -17,6 +18,7 @@ const SingleAssessmentForm = ({ onLoadingStart, onAssessmentComplete }: SingleAs
   const [product, setProduct] = useState('')
   const [vendor, setVendor] = useState('')
   const [hash, setHash] = useState('')
+  const [proMode, setProMode] = useState(false)
 
   const handleAssess = async () => {
     // Normalize inputs exactly like the HTML version
@@ -50,12 +52,15 @@ const SingleAssessmentForm = ({ onLoadingStart, onAssessmentComplete }: SingleAs
       const data = await assessApplication(
         productTrimmed,
         vendorTrimmed,
-        hashTrimmed
+        hashTrimmed,
+        false,
+        proMode
       )
       onAssessmentComplete(data, {
         productName: productTrimmed,
         vendorName: vendorTrimmed,
         hash: hashTrimmed,
+        proMode: proMode,
       })
     } catch (error) {
       alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'))
@@ -100,6 +105,24 @@ const SingleAssessmentForm = ({ onLoadingStart, onAssessmentComplete }: SingleAs
           value={hash}
           onChange={(e) => setHash(e.target.value)}
         />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="pro-mode" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            id="pro-mode"
+            checked={proMode}
+            onChange={(e) => setProMode(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          <span>
+            <strong>PRO Mode</strong> - Use gemini-2.5-pro for all AI operations (higher quality, slower)
+          </span>
+        </label>
+        <small style={{ display: 'block', marginTop: '4px', color: '#666', marginLeft: '24px' }}>
+          Note: Security Recommendation always uses PRO model regardless of this setting
+        </small>
       </div>
 
       <button type="button" onClick={handleAssess}>

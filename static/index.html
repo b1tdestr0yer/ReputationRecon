@@ -35,6 +35,16 @@
                 <input type="text" id="hash" placeholder="MD5, SHA1, or SHA256" maxlength="128">
             </div>
             
+            <div class="form-group">
+                <label for="pro-mode" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pro-mode" style="cursor: pointer;">
+                    <span><strong>PRO Mode</strong> - Use gemini-2.5-pro for all AI operations (higher quality, slower)</span>
+                </label>
+                <small style="display: block; margin-top: 4px; color: #666; margin-left: 24px;">
+                    Note: Security Recommendation always uses PRO model regardless of this setting
+                </small>
+            </div>
+            
             <button type="button" onclick="assessApplication()"><i class="fas fa-search"></i> Assess Application</button>
         </div>
         
@@ -62,6 +72,15 @@
                         <input type="text" class="compare-vendor" placeholder="Vendor name" maxlength="128">
                     </div>
                 </div>
+            </div>
+            <div class="form-group">
+                <label for="compare-pro-mode" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="compare-pro-mode" style="cursor: pointer;">
+                    <span><strong>PRO Mode</strong> - Use gemini-2.5-pro for all AI operations (higher quality, slower)</span>
+                </label>
+                <small style="display: block; margin-top: 4px; color: #666; margin-left: 24px;">
+                    Note: Security Recommendation always uses PRO model regardless of this setting
+                </small>
             </div>
             <button onclick="addCompareItem()">+ Add Another</button>
             <button onclick="compareApplications()">Compare Applications</button>
@@ -102,6 +121,7 @@
     <script>
         let isCompareMode = false;
         let currentAssessmentData = null;
+        let currentProMode = false;
         let loadingStepInterval = null;
         
         // CVE Pagination functionality - global scope
@@ -374,8 +394,9 @@
             const product = document.getElementById('product').value.trim();
             const vendor = document.getElementById('vendor').value.trim();
             const hash = document.getElementById('hash').value.trim();
+            const proMode = document.getElementById('pro-mode').checked;
             
-            console.log('Form values:', { product, vendor, hash });
+            console.log('Form values:', { product, vendor, hash, proMode });
             
             // Validate input lengths
             if (product && product.length > 128) {
@@ -406,7 +427,8 @@
                     product_name: product || null,
                     vendor_name: vendor || null,
                     url: null,
-                    hash: hash || null
+                    hash: hash || null,
+                    pro_mode: proMode
                 };
                 console.log('Request body:', requestBody);
                 
@@ -430,6 +452,7 @@
                 const data = await response.json();
                 console.log('Response data received');
                 currentAssessmentData = data;
+                currentProMode = proMode; // Store the PRO mode setting
                 stopLoadingAnimation();
                 displayResults(data);
             } catch (error) {
@@ -442,13 +465,27 @@
         }
         
         async function refreshAssessment() {
-            // Refresh the assessment with force_refresh=true
+            // Refresh the assessment with force_refresh=true, preserving PRO mode
+            // Get the original values from the form or use stored values
+            const product = document.getElementById('product').value.trim();
+            const vendor = document.getElementById('vendor').value.trim();
+            const hash = document.getElementById('hash').value.trim();
+            // Use stored proMode if available, otherwise check the checkbox
+            const proMode = currentProMode !== undefined ? currentProMode : document.getElementById('pro-mode').checked;
+            
+            // Set the checkbox to match the stored proMode
+            if (document.getElementById('pro-mode')) {
+                document.getElementById('pro-mode').checked = proMode;
+            }
+            
+            // Call assessApplication with force refresh and preserved proMode
             await assessApplication(true);
         }
         
         async function compareApplications() {
             const items = document.querySelectorAll('.compare-item');
             const requests = [];
+            const proMode = document.getElementById('compare-pro-mode').checked;
             
             for (const item of items) {
                 const product = item.querySelector('.compare-product').value.trim();
@@ -467,7 +504,8 @@
                 if (product || vendor) {
                     requests.push({
                         product_name: product || null,
-                        vendor_name: vendor || null
+                        vendor_name: vendor || null,
+                        pro_mode: proMode
                     });
                 }
             }

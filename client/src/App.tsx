@@ -12,6 +12,7 @@ interface AssessmentParams {
   productName: string | null
   vendorName: string | null
   hash: string | null
+  proMode: boolean
 }
 
 function App() {
