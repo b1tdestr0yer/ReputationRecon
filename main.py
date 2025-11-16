@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -17,6 +18,18 @@ app = FastAPI(title="Secure Your App Health API", description="AI-powered securi
 # Serve static files (web UI)
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Serve logo.png from root
+@app.get("/logo.png")
+async def get_logo():
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path, media_type="image/png")
+    # Fallback to client/public if exists
+    client_logo_path = "client/public/logo.png"
+    if os.path.exists(client_logo_path):
+        return FileResponse(client_logo_path, media_type="image/png")
+    return {"error": "Logo not found"}, 404
 
 # Setup CORS
 app.add_middleware(
