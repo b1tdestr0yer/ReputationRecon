@@ -207,14 +207,52 @@ sudo systemctl restart nginx
 
 # Step 9: Obtain SSL certificate (certbot will automatically update nginx config)
 echo -e "${YELLOW}[9/9] Obtaining SSL certificate...${NC}"
-sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
+if sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect; then
+    echo -e "${GREEN}✓ SSL certificate obtained successfully${NC}"
+    
+    # Verify certificate files exist
+    if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+        echo -e "${GREEN}✓ Certificate files verified${NC}"
+    else
+        echo -e "${RED}✗ Warning: Certificate files not found after certbot run${NC}"
+    fi
+    
+    # Test Nginx config after certbot modifications
+    if sudo nginx -t; then
+        echo -e "${GREEN}✓ Nginx configuration is valid${NC}"
+    else
+        echo -e "${RED}✗ Nginx configuration test failed after certbot${NC}"
+        echo "Please check the configuration manually"
+    fi
+else
+    echo -e "${RED}✗ Failed to obtain SSL certificate${NC}"
+    echo "This could be due to:"
+    echo "  1. Domain DNS not pointing to this server"
+    echo "  2. Port 80 not accessible from internet"
+    echo "  3. Firewall blocking Let's Encrypt validation"
+    echo ""
+    echo "You can try running the troubleshooting script:"
+    echo "  chmod +x troubleshoot_ssl.sh"
+    echo "  ./troubleshoot_ssl.sh"
+    exit 1
+fi
 
 # Enable and start services
 echo -e "${YELLOW}Enabling and starting services...${NC}"
 sudo systemctl daemon-reload
 sudo systemctl enable reputationrecon
 sudo systemctl restart reputationrecon
+
+# Restart Nginx to apply SSL configuration
 sudo systemctl restart nginx
+
+# Verify Nginx is running
+if sudo systemctl is-active --quiet nginx; then
+    echo -e "${GREEN}✓ Nginx is running${NC}"
+else
+    echo -e "${RED}✗ Nginx failed to start${NC}"
+    echo "Check logs with: sudo journalctl -u nginx -n 50"
+fi
 
 # Final checks
 echo ""
